@@ -315,7 +315,7 @@ describe('AI Summarization & Safety Pipeline Tests', () => {
       expect(mockSuccessFetch).toHaveBeenCalled();
       expect(result.summary).toBe(mockValidApiResponse.summary);
       expect(result.category).toBe('Cloud');
-      expect(result.aiModel).toBe('gemini-2.5-flash');
+      expect(result.aiModel).toBe('gemini-flash-latest');
     });
   });
 
