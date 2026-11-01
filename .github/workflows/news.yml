@@ -1,0 +1,51 @@
+name: Ingest news
+
+on:
+  schedule:
+    - cron: '0 */2 * * *' # every 2 hours (UTC)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (no Firestore writes, no pushes)'
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: techdaily-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - run: npm ci
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/1015898924676/locations/global/workloadIdentityPools/github/providers/github'
+          service_account: 'github-deployer@techdaily-prod.iam.gserviceaccount.com'
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Run ingestion
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FIREBASE_PROJECT_ID: techdaily-prod
+        run: npx tsx src/jobs.ts ingest --concurrency=3 ${{ inputs.dry_run && '--dry-run' || '' }}

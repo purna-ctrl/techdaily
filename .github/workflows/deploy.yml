@@ -1,0 +1,57 @@
+name: Deploy web + Firestore
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - 'firebase.json'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: techdaily-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9 # Dart 3.13.7, matches pubspec sdk ^3.13.0
+          cache: true
+
+      - run: flutter --version
+      - run: flutter pub get
+      - run: flutter build web --release
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/1015898924676/locations/global/workloadIdentityPools/github/providers/github'
+          service_account: 'github-deployer@techdaily-prod.iam.gserviceaccount.com'
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Deploy hosting + Firestore rules/indexes
+        # firebase-tools picks up GOOGLE_APPLICATION_CREDENTIALS exported by the auth step.
+        run: npx --yes firebase-tools@latest deploy --only hosting,firestore --project techdaily-prod --non-interactive

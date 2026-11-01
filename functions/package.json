@@ -1,0 +1,37 @@
+{
+  "name": "techdaily-functions",
+  "version": "1.0.0",
+  "description": "TechDaily Backend News Collection Engine and Cloud Functions",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "test": "jest --passWithNoTests",
+    "ingest": "tsx src/cli-runner.ts",
+    "jobs": "tsx src/jobs.ts"
+  },
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.3.5",
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^5.0.0",
+    "google-auth-library": "^9.15.1",
+    "html-entities": "^2.5.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "private": true
+}

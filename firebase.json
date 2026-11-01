@@ -1,0 +1,56 @@
+{
+    "firestore":  {
+                      "rules":  "firestore.rules",
+                      "indexes":  "firestore.indexes.json"
+                  },
+    "functions":  [
+                      {
+                          "source":  "functions",
+                          "codebase":  "default",
+                          "ignore":  [
+                                         "node_modules",
+                                         ".git",
+                                         "firebase-debug.log",
+                                         "firebase-debug.*.log",
+                                         "*.local"
+                                     ],
+                          "predeploy":  [
+                                            "npm --prefix \"$RESOURCE_DIR\" run build"
+                                        ]
+                      }
+                  ],
+    "flutter":  {
+                    "platforms":  {
+                                      "android":  {
+                                                      "default":  {
+                                                                      "projectId":  "techdaily-prod",
+                                                                      "appId":  "1:1015898924676:android:6b6887c494aa2468e744d1",
+                                                                      "fileOutput":  "android/app/google-services.json"
+                                                                  }
+                                                  },
+                                      "dart":  {
+                                                   "lib/firebase_options.dart":  {
+                                                                                     "projectId":  "techdaily-prod",
+                                                                                     "configurations":  {
+                                                                                                            "android":  "1:1015898924676:android:6b6887c494aa2468e744d1",
+                                                                                                            "web":  "1:1015898924676:web:e38a6fee99ee7473e744d1"
+                                                                                                        }
+                                                                                 }
+                                               }
+                                  }
+                },
+    "hosting":  {
+                    "public":  "build/web",
+                    "ignore":  [
+                                   "firebase.json",
+                                   "**/.*",
+                                   "**/node_modules/**"
+                               ],
+                    "rewrites":  [
+                                     {
+                                         "source":  "**",
+                                         "destination":  "/index.html"
+                                     }
+                                 ]
+                }
+}

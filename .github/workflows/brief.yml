@@ -1,0 +1,52 @@
+name: Daily brief
+
+on:
+  schedule:
+    - cron: '30 0 * * *' # 00:30 UTC = 06:00 IST
+  workflow_dispatch:
+    inputs:
+      push:
+        description: 'Send the daily-brief push notification'
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: techdaily-brief
+  cancel-in-progress: false
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - run: npm ci
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/1015898924676/locations/global/workloadIdentityPools/github/providers/github'
+          service_account: 'github-deployer@techdaily-prod.iam.gserviceaccount.com'
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Build daily brief
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FIREBASE_PROJECT_ID: techdaily-prod
+        # Scheduled runs always push; manual runs push unless the box is unticked.
+        run: npx tsx src/jobs.ts daily-brief ${{ (github.event_name == 'workflow_dispatch' && !inputs.push) && '--no-push' || '' }}

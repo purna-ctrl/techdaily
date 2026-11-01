@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. Articles Collection
+    // - Public users can read published articles
+    // - Ordinary users cannot create, update, or delete articles (strictly reserved for backend automation)
+    match /articles/{articleId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 2. Daily Executive Briefs Collection
+    // - Public users can read generated daily briefs
+    // - Ordinary users cannot create, update, or modify briefs
+    match /dailyBriefs/{dateId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 3. Source Health & Monitoring
+    // - Locked down from all client access; reserved for Firebase Admin SDK
+    match /sourceHealth/{sourceId} {
+      allow read, write: if false;
+    }
+
+    // 3b. Private article source text (grounding for askArticle) and askArticle rate-limit counters
+    // - Server-only (Admin SDK bypasses rules)
+    match /articleSources/{articleId} {
+      allow read, write: if false;
+    }
+    match /askRateLimits/{bucketId} {
+      allow read, write: if false;
+    }
+
+    // 4. Users Collection
+    // - Users can read and write only their own profile and preferences
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      // 5. User Saved Articles Subcollection
+      // - Authenticated users can read, save, and remove only their own bookmarks
+      match /savedArticles/{articleId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}

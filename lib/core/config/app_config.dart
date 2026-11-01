@@ -1,0 +1,43 @@
+/// Central runtime configuration for TechDaily.
+///
+/// Keep every deploy-dependent URL / key in this one file.
+library;
+
+/// Public site origin used to build shareable deep links (`/article/<id>`).
+const String kSiteUrl = 'https://techdaily-prod.web.app';
+
+/// "Ask AI about this article" backend.
+/// Contract: POST JSON `{articleId, question}` → `{answer}`.
+///
+/// NOTE: placeholder URL — it may need updating after the Cloud Function is
+/// deployed (check the URL printed by `firebase deploy --only functions`).
+/// If the call fails for any reason the app falls back to the on-device,
+/// article-grounded answers in `ArticleAiAssistantService.answerQuestion`.
+const String kAskArticleEndpoint =
+    'https://us-central1-techdaily-prod.cloudfunctions.net/askArticle';
+
+/// Timeout for the Ask AI request before falling back to local answers.
+const Duration kAskArticleTimeout = Duration(seconds: 12);
+
+/// Web push (FCM) VAPID public key.
+/// Firebase console → Project settings → Cloud Messaging → Web Push
+/// certificates → "Key pair". Leave empty until generated; web push token
+/// registration is skipped while it is empty (Android is unaffected).
+const String kWebPushVapidKey = String.fromEnvironment(
+  'TECHDAILY_VAPID_KEY',
+  defaultValue: '',
+);
+
+/// FCM topics used for Android push. Web clients cannot subscribe to topics
+/// from the browser; their tokens are stored in `users/{uid}.fcmTokens` so the
+/// backend can subscribe/send to them server-side.
+const String kTopicBreaking = 'breaking';
+const String kTopicDailyBrief = 'daily-brief';
+
+/// Build-time switch to run the app on bundled sample data instead of
+/// Firestore (used for local screenshots / offline demos):
+/// `flutter build web --dart-define=TECHDAILY_DATA_SOURCE=local`.
+const String kDataSource = String.fromEnvironment(
+  'TECHDAILY_DATA_SOURCE',
+  defaultValue: 'firestore',
+);

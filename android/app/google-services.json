@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1015898924676",
+    "project_id": "techdaily-prod",
+    "storage_bucket": "techdaily-prod.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1015898924676:android:6b6887c494aa2468e744d1",
+        "android_client_info": {
+          "package_name": "com.techdaily.techdaily"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD51FVzJzf2xBd4M5B9xOGSSbmcTO7VGKQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

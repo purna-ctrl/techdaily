@@ -1,0 +1,48 @@
+name: Maintenance - purge seed articles
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (only count what would be deleted)'
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: techdaily-ingest # never overlap with ingestion writes
+  cancel-in-progress: false
+
+jobs:
+  purge-seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - run: npm ci
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/1015898924676/locations/global/workloadIdentityPools/github/providers/github'
+          service_account: 'github-deployer@techdaily-prod.iam.gserviceaccount.com'
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Purge seed articles
+        env:
+          FIREBASE_PROJECT_ID: techdaily-prod
+        run: npx tsx src/jobs.ts purge-seed ${{ inputs.dry_run && '--dry-run' || '' }}
