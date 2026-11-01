@@ -20,7 +20,7 @@ export class ServerAiSummarizer implements AiSummarizer {
 
   constructor(config: ServerAiSummarizerConfig = {}) {
     this.apiKey = config.apiKey || process.env.GEMINI_API_KEY;
-    this.model = config.model || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    this.model = config.model || process.env.GEMINI_MODEL || 'gemini-flash-latest';
     this.timeoutMs = config.timeoutMs || 30000;
     this.fallback = config.fallback || new RuleBasedAiSummarizer();
     this.fetchFn = config.fetchFn || (globalThis.fetch as typeof fetch);

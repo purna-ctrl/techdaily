@@ -183,7 +183,7 @@ export interface AskAnswerResult {
 export class ArticleQaService {
   constructor(
     private apiKey?: string,
-    private model = process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    private model = process.env.GEMINI_MODEL || 'gemini-flash-latest',
     private fetchFn: typeof fetch = globalThis.fetch as typeof fetch,
     private timeoutMs = 20000
   ) {}
