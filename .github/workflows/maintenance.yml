@@ -1,10 +1,17 @@
-name: Maintenance - purge seed articles
+name: Maintenance
 
 on:
   workflow_dispatch:
     inputs:
+      task:
+        description: 'What to run'
+        type: choice
+        options:
+          - migrate-articles
+          - purge-seed
+        default: migrate-articles
       dry_run:
-        description: 'Dry run (only count what would be deleted)'
+        description: 'Dry run (only count; no writes)'
         type: boolean
         default: true
 
@@ -17,7 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  purge-seed:
+  maintenance:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -42,7 +49,9 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Purge seed articles
+      # migrate-articles: v1 `articles` -> v2 `stories` (fallback cards; the hourly run re-enriches
+      # recent ones with Gemini). `articles` is only read. Safe to re-run.
+      - name: Run ${{ inputs.task }}
         env:
           FIREBASE_PROJECT_ID: techdaily-prod
-        run: npx tsx src/jobs.ts purge-seed ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: npx tsx src/jobs.ts ${{ inputs.task }} ${{ inputs.dry_run && '--dry-run' || '' }}

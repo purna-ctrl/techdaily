@@ -9,19 +9,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
   <title>TechDaily — Tech news in simple words</title>
-  <meta name="description" content="TechDaily explains the day's most important technology news in simple words — AI, smartphones, chips, cybersecurity, startups and India tech, with links to every original source.">
-  <meta name="keywords" content="tech news, technology news India, AI news, simple explanations, daily tech brief">
-  <meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0B0B0F" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="TechDaily explains technology news for everyday people in India in simple words — AI, phones, chips, startups, money, privacy, and scams &amp; security — with what it means for you and links to every original source.">
+  <meta name="keywords" content="tech news India, scams, cyber security, UPI, AI news, phones, gadgets, startups, simple words">
+  <meta name="theme-color" content="#0B0B0F">
   <link rel="canonical" href="https://techdaily-prod.web.app/">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="TechDaily">
   <meta property="og:title" content="TechDaily — Tech news in simple words">
-  <meta property="og:description" content="The day's most important tech stories, explained simply. AI, gadgets, chips, security, startups and India tech.">
+  <meta property="og:description" content="Tech news for everyday people in India, in simple words: what happened, does it affect you, and what to do.">
   <meta property="og:url" content="https://techdaily-prod.web.app/">
-  <meta property="og:image" content="https://techdaily-prod.web.app/icons/og-image.png">
+  <meta property="og:image" content="https://techdaily-prod.web.app/og/default.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:locale" content="en_IN">
@@ -29,13 +28,14 @@
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="TechDaily — Tech news in simple words">
-  <meta name="twitter:description" content="The day's most important tech stories, explained simply.">
-  <meta name="twitter:image" content="https://techdaily-prod.web.app/icons/og-image.png">
+  <meta name="twitter:description" content="Tech news for everyday people in India, in simple words.">
+  <meta name="twitter:image" content="https://techdaily-prod.web.app/og/default.png">
 
   <!-- PWA / iOS -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="alternate" type="application/rss+xml" title="TechDaily" href="/rss.xml">
   <meta name="apple-mobile-web-app-title" content="TechDaily">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
@@ -43,17 +43,15 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    :root { color-scheme: light dark; }
-    html, body { margin: 0; height: 100%; background: #F7F5F0; }
-    @media (prefers-color-scheme: dark) { html, body { background: #0B0B0F; } }
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; background: #0B0B0F; }
     #td-splash {
       position: fixed; inset: 0; z-index: 9999;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-      background: #F7F5F0; color: #0B0B0F;
+      background: #0B0B0F; color: #F4F2EC;
       font: 600 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       transition: opacity .35s ease;
     }
-    @media (prefers-color-scheme: dark) { #td-splash { background: #0B0B0F; color: #F4F2EC; } }
     #td-splash.hide { opacity: 0; pointer-events: none; }
     #td-splash .tile {
       width: 76px; height: 76px; border-radius: 20px; background: #FF5A1F; color: #fff;
@@ -67,6 +65,7 @@
     @keyframes td-load { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
     @media (prefers-reduced-motion: reduce) { #td-splash .tile, #td-splash .bar i { animation: none; } }
   </style>
+  <noscript><style id="td-nojs">#td-splash{display:none!important}</style></noscript>
 </head>
 <body>
   <div id="td-splash" role="status" aria-live="polite">
@@ -74,13 +73,19 @@
     <div>TechDaily · Tech news in simple words</div>
     <div class="bar"><i></i></div>
   </div>
-  <noscript>TechDaily needs JavaScript to run. Please enable it and reload.</noscript>
+  <!--TD-SEO--><!--/TD-SEO-->
+  <noscript><p style="color:#F4F2EC;font:16px system-ui;padding:0 16px">The TechDaily app needs JavaScript, but you can read every story above without it.</p></noscript>
   <script>
     window.addEventListener('flutter-first-frame', function () {
+      var seo0 = document.getElementById('td-seo');
+      if (seo0) seo0.style.display = 'none';
       var s = document.getElementById('td-splash');
       if (!s) return;
       s.classList.add('hide');
       setTimeout(function () { s.remove(); }, 400);
+      // Pre-rendered story list (for crawlers / no-JS) is replaced by the app.
+      var seo = document.getElementById('td-seo');
+      if (seo) seo.remove();
     });
   </script>
   <script src="flutter_bootstrap.js" async></script>

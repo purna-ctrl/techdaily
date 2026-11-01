@@ -27,6 +27,35 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // 2b. v2 stories (written only by the GitHub Actions jobs via the Admin SDK)
+    match /stories/{storyId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /storyBriefs/{briefId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    // Feed text kept for later AI re-enrichment: server-only.
+    match /storySources/{storyId} {
+      allow read, write: if false;
+    }
+
+    // 2c. Newsletter signups: anyone may add their email (app or static pages via REST),
+    // nobody can read, change or delete them from a client.
+    match /signups/{signupId} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'createdAt', 'source'])
+        && request.resource.data.keys().hasAll(['email', 'createdAt'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() >= 6
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+[.][^@\\s]{2,}$')
+        && request.resource.data.createdAt == request.time
+        && (!('source' in request.resource.data)
+            || (request.resource.data.source is string && request.resource.data.source.size() <= 40));
+      allow read, update, delete: if false;
+    }
+
     // 3. Source Health & Monitoring
     // - Locked down from all client access; reserved for Firebase Admin SDK
     match /sourceHealth/{sourceId} {
@@ -50,6 +79,11 @@ service cloud.firestore {
       // 5. User Saved Articles Subcollection
       // - Authenticated users can read, save, and remove only their own bookmarks
       match /savedArticles/{articleId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // 6. Saved stories (v2)
+      match /savedStories/{storyId} {
         allow read, write: if isOwner(userId);
       }
     }

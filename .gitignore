@@ -67,3 +67,6 @@ build_releases/
 firebase-debug*.log
 service-account*.json
 *-sa-key*.json
+
+# v2 story cache (GitHub Actions cache / local runs)
+functions/.cache/

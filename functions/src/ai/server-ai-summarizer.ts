@@ -18,12 +18,26 @@ export interface ServerAiSummarizerConfig {
  *   GEMINI_MAX_CALLS_PER_RUN (default: unlimited), GEMINI_MIN_INTERVAL_MS (default: 0)
  */
 const geminiBudget = { calls: 0, rateLimited: false, nextSlot: 0 };
+/** Stops all further Gemini calls in this process (called on HTTP 429). */
+export function markGeminiRateLimited(): void {
+  geminiBudget.rateLimited = true;
+}
+/** True while Gemini may still be called this run (key set, not rate-limited, budget left). */
+export function geminiBudgetLeft(): boolean {
+  const max = parseInt(process.env.GEMINI_MAX_CALLS_PER_RUN || '', 10);
+  if (geminiBudget.rateLimited) return false;
+  return !(Number.isFinite(max) && max >= 0 && geminiBudget.calls >= max);
+}
+export function geminiCallsUsed(): number {
+  return geminiBudget.calls;
+}
 export function resetGeminiBudget(): void {
   geminiBudget.calls = 0;
   geminiBudget.rateLimited = false;
   geminiBudget.nextSlot = 0;
 }
-async function takeGeminiSlot(): Promise<boolean> {
+/** Reserves one Gemini call under the shared per-run budget (false = use the fallback). */
+export async function takeGeminiSlot(): Promise<boolean> {
   const max = parseInt(process.env.GEMINI_MAX_CALLS_PER_RUN || '', 10);
   if (geminiBudget.rateLimited) return false;
   if (Number.isFinite(max) && max >= 0 && geminiBudget.calls >= max) return false;

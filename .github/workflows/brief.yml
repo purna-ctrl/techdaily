@@ -1,12 +1,14 @@
-name: Daily brief
+name: Today in 5 (06:00 IST)
 
+# The hourly news run already refreshes "Today in 5"; this run picks the morning edition from the
+# stories of the last 48 h and sends the daily push.
 on:
   schedule:
     - cron: '30 0 * * *' # 00:30 UTC = 06:00 IST
   workflow_dispatch:
     inputs:
       push:
-        description: 'Send the daily-brief push notification'
+        description: 'Send the daily push notification'
         type: boolean
         default: true
 
@@ -44,9 +46,8 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Build daily brief
+      - name: Build Today in 5
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_PROJECT_ID: techdaily-prod
         # Scheduled runs always push; manual runs push unless the box is unticked.
         run: npx tsx src/jobs.ts daily-brief ${{ (github.event_name == 'workflow_dispatch' && !inputs.push) && '--no-push' || '' }}

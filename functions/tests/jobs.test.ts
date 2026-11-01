@@ -26,14 +26,23 @@ function pushMock() {
 
 describe('jobs CLI (GitHub Actions runner)', () => {
   test('parseArgs reads command and flags', () => {
-    expect(parseArgs(['ingest', '--dry-run', '--concurrency=5', '--source=verge'])).toEqual({
+    expect(parseArgs(['ingest', '--dry-run', '--concurrency=5', '--source=verge'])).toMatchObject({
       command: 'ingest',
       dryRun: true,
       push: true,
       source: 'verge',
       concurrency: 5,
       jsonOut: undefined,
+      out: '../build/web',
     });
+    expect(parseArgs(['render', '--out=/tmp/w', '--from-json=s.json', '--cache=.cache/s.json'])).toMatchObject({
+      command: 'render',
+      out: '/tmp/w',
+      fromJson: 's.json',
+      cache: '.cache/s.json',
+    });
+    expect(parseArgs(['migrate-articles', '--limit=50']).limit).toBe(50);
+    expect(parseArgs(['ingest']).concurrency).toBe(6);
     expect(parseArgs(['daily-brief', '--no-push']).push).toBe(false);
     expect(parseArgs(['purge-seed']).dryRun).toBe(false);
     expect(() => parseArgs(['--dry-run'])).toThrow(/command/);

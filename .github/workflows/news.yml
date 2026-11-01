@@ -1,12 +1,14 @@
-name: Ingest news
+name: News (ingest + render + deploy)
 
+# Hourly: fetch feeds -> cluster -> write story cards (Gemini, throttled) -> pre-render static pages
+# into the Flutter web build -> deploy Hosting. Free Spark plan: no Cloud Functions, no SSR.
 on:
   schedule:
-    - cron: '0 */2 * * *' # every 2 hours (UTC)
+    - cron: '5 * * * *' # every hour at :05 (UTC)
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run (no Firestore writes, no pushes)'
+        description: 'Dry run (fetch + cluster + fallback cards only; no Firestore writes, no deploy)'
         type: boolean
         default: false
 
@@ -18,16 +20,44 @@ concurrency:
   group: techdaily-ingest
   cancel-in-progress: false
 
+env:
+  FIREBASE_PROJECT_ID: techdaily-prod
+
 jobs:
-  ingest:
+  news:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: functions
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
+      # ---- Flutter web build: reused from cache while the app source is unchanged ----
+      - name: Restore Flutter web build
+        id: webcache
+        uses: actions/cache/restore@v4
+        with:
+          path: build/web
+          key: flutter-web-${{ hashFiles('lib/**', 'web/**', 'assets/**', 'pubspec.yaml', 'pubspec.lock') }}
+
+      - if: steps.webcache.outputs.cache-hit != 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+
+      - if: steps.webcache.outputs.cache-hit != 'true'
+        name: Build Flutter web
+        run: |
+          flutter pub get
+          flutter build web --release
+
+      - if: steps.webcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/web
+          key: flutter-web-${{ hashFiles('lib/**', 'web/**', 'assets/**', 'pubspec.yaml', 'pubspec.lock') }}
+
+      # ---- Jobs ----
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -35,8 +65,18 @@ jobs:
           cache-dependency-path: functions/package-lock.json
 
       - run: npm ci
+        working-directory: functions
+
+      # Story cache: lets ingest/render read only changed stories (Spark: 50k reads/day).
+      - name: Restore story cache
+        uses: actions/cache/restore@v4
+        with:
+          path: functions/.cache/stories.json
+          key: stories-cache-${{ github.run_id }}
+          restore-keys: stories-cache-
 
       - id: auth
+        if: ${{ !inputs.dry_run }}
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: 'projects/1015898924676/locations/global/workloadIdentityPools/github/providers/github'
@@ -44,10 +84,32 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Run ingestion
+      - name: Ingest stories
+        working-directory: functions
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MAX_CALLS_PER_RUN: '30'
-          GEMINI_MIN_INTERVAL_MS: '7000'
-          FIREBASE_PROJECT_ID: techdaily-prod
-        run: npx tsx src/jobs.ts ingest --concurrency=3 ${{ inputs.dry_run && '--dry-run' || '' }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }} # optional repo variable; default gemini-flash-lite-latest
+          GEMINI_MAX_CALLS_PER_RUN: '40'
+          GEMINI_MIN_INTERVAL_MS: '4500'
+        run: npx tsx src/jobs.ts ingest --cache=.cache/stories.json --stories-out=.cache/render-input.json ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Render static pages into build/web
+        working-directory: functions
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            npx tsx src/jobs.ts render --from-json=.cache/render-input.json --out=../build/web
+          else
+            npx tsx src/jobs.ts render --cache=.cache/stories.json --out=../build/web
+          fi
+          ls ../build/web/story | wc -l
+
+      - name: Save story cache
+        if: ${{ !inputs.dry_run && success() }}
+        uses: actions/cache/save@v4
+        with:
+          path: functions/.cache/stories.json
+          key: stories-cache-${{ github.run_id }}
+
+      - name: Deploy Hosting
+        if: ${{ !inputs.dry_run }}
+        run: npx --yes firebase-tools@latest deploy --only hosting --project techdaily-prod --non-interactive --message "news run ${{ github.run_id }}"

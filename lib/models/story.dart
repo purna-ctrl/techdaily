@@ -1,0 +1,286 @@
+import 'dart:math' as math;
+
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+
+import '../core/config/app_config.dart';
+import '../core/constants/story_categories.dart';
+
+DateTime _date(dynamic v) {
+  if (v is DateTime) return v;
+  if (v is Timestamp) return v.toDate();
+  if (v is String) return DateTime.tryParse(v) ?? DateTime.fromMillisecondsSinceEpoch(0);
+  if (v is Map && v['_seconds'] is num) {
+    return DateTime.fromMillisecondsSinceEpoch(((v['_seconds'] as num) * 1000).round());
+  }
+  return DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+List<String> _strings(dynamic v) =>
+    v is List ? v.whereType<Object>().map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList() : const [];
+
+class StorySource {
+  final String name;
+  final String url;
+  final String title;
+  final DateTime publishedAt;
+
+  const StorySource({required this.name, required this.url, this.title = '', required this.publishedAt});
+
+  factory StorySource.fromMap(Map<String, dynamic> m) => StorySource(
+        name: (m['name'] ?? '').toString(),
+        url: (m['url'] ?? '').toString(),
+        title: (m['title'] ?? '').toString(),
+        publishedAt: _date(m['publishedAt']),
+      );
+
+  Map<String, dynamic> toMap() =>
+      {'name': name, 'url': url, 'title': title, 'publishedAt': publishedAt.toUtc().toIso8601String()};
+}
+
+class ScamInfo {
+  final String howItWorks;
+  final List<String> warningSigns;
+  final List<String> ifTargeted;
+  final String? advisoryUrl;
+
+  const ScamInfo({
+    required this.howItWorks,
+    required this.warningSigns,
+    required this.ifTargeted,
+    this.advisoryUrl,
+  });
+
+  static ScamInfo? fromMap(dynamic m) {
+    if (m is! Map) return null;
+    final how = (m['howItWorks'] ?? '').toString();
+    if (how.isEmpty) return null;
+    final adv = m['advisoryUrl'];
+    return ScamInfo(
+      howItWorks: how,
+      warningSigns: _strings(m['warningSigns']),
+      ifTargeted: _strings(m['ifTargeted']),
+      advisoryUrl: adv is String && adv.startsWith('http') ? adv : null,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'howItWorks': howItWorks,
+        'warningSigns': warningSigns,
+        'ifTargeted': ifTargeted,
+        'advisoryUrl': advisoryUrl,
+      };
+}
+
+/// One news event in simple words, backed by one or more original reports.
+class Story {
+  final String id;
+  final String slug;
+  final String headline;
+  final String category;
+  final DateTime publishedAt;
+  final DateTime updatedAt;
+  final List<StorySource> sources;
+  final String whatHappened;
+  final String affectsWho;
+  final List<String> whatToDo;
+  final String whatItMeans;
+  final ScamInfo? scam;
+  final String confidence;
+  final bool developing;
+  final String aiModel;
+  final String region;
+
+  const Story({
+    required this.id,
+    required this.slug,
+    required this.headline,
+    required this.category,
+    required this.publishedAt,
+    required this.updatedAt,
+    required this.sources,
+    required this.whatHappened,
+    required this.affectsWho,
+    required this.whatToDo,
+    required this.whatItMeans,
+    this.scam,
+    this.confidence = 'medium',
+    this.developing = false,
+    this.aiModel = '',
+    this.region = 'GLOBAL',
+  });
+
+  factory Story.fromMap(Map<String, dynamic> m, {String? docId}) {
+    final sources = (m['sources'] is List ? m['sources'] as List : const [])
+        .whereType<Map>()
+        .map((e) => StorySource.fromMap(Map<String, dynamic>.from(e)))
+        .where((s) => s.url.startsWith('http'))
+        .toList();
+    final cat = (m['category'] ?? '').toString();
+    return Story(
+      id: (m['id'] ?? docId ?? '').toString(),
+      slug: (m['slug'] ?? '').toString(),
+      headline: (m['headline'] ?? '').toString(),
+      category: isStoryCategoryId(cat) ? cat : 'innovations',
+      publishedAt: _date(m['publishedAt']),
+      updatedAt: _date(m['updatedAt'] ?? m['publishedAt']),
+      sources: sources,
+      whatHappened: (m['whatHappened'] ?? '').toString(),
+      affectsWho: (m['affectsWho'] ?? '').toString(),
+      whatToDo: _strings(m['whatToDo']),
+      whatItMeans: (m['whatItMeans'] ?? '').toString(),
+      scam: ScamInfo.fromMap(m['scam']),
+      confidence: (m['confidence'] ?? 'medium').toString(),
+      developing: m['developing'] == true,
+      aiModel: (m['aiModel'] ?? '').toString(),
+      region: m['region'] == 'IN' ? 'IN' : 'GLOBAL',
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'slug': slug,
+        'headline': headline,
+        'category': category,
+        'publishedAt': publishedAt.toUtc().toIso8601String(),
+        'updatedAt': updatedAt.toUtc().toIso8601String(),
+        'sources': sources.map((s) => s.toMap()).toList(),
+        'whatHappened': whatHappened,
+        'affectsWho': affectsWho,
+        'whatToDo': whatToDo,
+        'whatItMeans': whatItMeans,
+        'scam': scam?.toMap(),
+        'confidence': confidence,
+        'developing': developing,
+        'aiModel': aiModel,
+        'region': region,
+      };
+
+  bool get isValid => id.isNotEmpty && slug.isNotEmpty && headline.isNotEmpty;
+
+  StoryCategory get categoryInfo => storyCategoryById(category);
+
+  /// Distinct publisher names, in order.
+  List<String> get sourceNames {
+    final seen = <String>{};
+    return [for (final s in sources) if (s.name.isNotEmpty && seen.add(s.name)) s.name];
+  }
+
+  /// Public URL of the pre-rendered story page.
+  String get webUrl => '$kSiteUrl/story/${Uri.encodeComponent(slug)}/';
+
+  bool get isFallback => aiModel.startsWith('techdaily-fallback');
+
+  /// Same formula as the backend ranking (recency x coverage x confidence).
+  double score(DateTime now) {
+    final ageH = math.max(0, now.difference(publishedAt).inMinutes / 60.0);
+    final recency = math.pow(0.5, ageH / 12).toDouble();
+    final coverage = 1 + 0.6 * math.min(sourceNames.length - 1, 4);
+    final conf = confidence == 'high' ? 1.15 : (confidence == 'low' ? 0.8 : 1.0);
+    final local = region == 'IN' ? 1.15 : 1.0;
+    final act = category == 'scams-security' && scam != null ? 1.2 : 1.0;
+    return recency * coverage * conf * local * act;
+  }
+
+  bool matches(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return false;
+    final hay = [
+      headline,
+      whatHappened,
+      affectsWho,
+      whatItMeans,
+      categoryInfo.label,
+      ...sourceNames,
+      ...whatToDo,
+    ].join(' ').toLowerCase();
+    return q.split(RegExp(r'\s+')).every(hay.contains);
+  }
+}
+
+class TodayItem {
+  final String storyId;
+  final String slug;
+  final String headline;
+  final String category;
+  final String whatItMeans;
+
+  const TodayItem({
+    required this.storyId,
+    required this.slug,
+    required this.headline,
+    required this.category,
+    this.whatItMeans = '',
+  });
+
+  factory TodayItem.fromMap(Map<String, dynamic> m) => TodayItem(
+        storyId: (m['storyId'] ?? '').toString(),
+        slug: (m['slug'] ?? '').toString(),
+        headline: (m['headline'] ?? '').toString(),
+        category: (m['category'] ?? '').toString(),
+        whatItMeans: (m['whatItMeans'] ?? '').toString(),
+      );
+
+  factory TodayItem.fromStory(Story s) =>
+      TodayItem(storyId: s.id, slug: s.slug, headline: s.headline, category: s.category, whatItMeans: s.whatItMeans);
+}
+
+/// Everything the home screen needs, loaded in one go.
+class StoryFeed {
+  final List<Story> stories;
+  final List<TodayItem> today;
+  final List<String> topIds;
+  final DateTime? generatedAt;
+
+  const StoryFeed({required this.stories, required this.today, this.topIds = const [], this.generatedAt});
+
+  static const empty = StoryFeed(stories: [], today: []);
+
+  factory StoryFeed.fromJson(Map<String, dynamic> m) {
+    final stories = (m['stories'] is List ? m['stories'] as List : const [])
+        .whereType<Map>()
+        .map((e) => Story.fromMap(Map<String, dynamic>.from(e)))
+        .where((s) => s.isValid)
+        .toList();
+    final todayMap = m['today'] is Map ? Map<String, dynamic>.from(m['today'] as Map) : const <String, dynamic>{};
+    final items = (todayMap['items'] is List ? todayMap['items'] as List : const [])
+        .whereType<Map>()
+        .map((e) => TodayItem.fromMap(Map<String, dynamic>.from(e)))
+        .where((t) => t.slug.isNotEmpty)
+        .toList();
+    return StoryFeed(
+      stories: stories,
+      today: items,
+      topIds: _strings(m['top']),
+      generatedAt: m['generatedAt'] == null ? null : _date(m['generatedAt']),
+    );
+  }
+
+  /// Ranked mix for the "Top Stories" tab.
+  List<Story> topStories({DateTime? now}) {
+    if (topIds.isNotEmpty) {
+      final byId = {for (final s in stories) s.id: s};
+      final ranked = [for (final id in topIds) if (byId[id] != null) byId[id]!];
+      final rest = stories.where((s) => !topIds.contains(s.id));
+      return [...ranked, ...rest];
+    }
+    final n = now ?? DateTime.now();
+    final list = [...stories]..sort((a, b) => b.score(n).compareTo(a.score(n)));
+    return list;
+  }
+
+  List<Story> inCategory(String id) => stories.where((s) => s.category == id).toList();
+
+  Story? bySlug(String slug) {
+    for (final s in stories) {
+      if (s.slug == slug) return s;
+    }
+    return null;
+  }
+
+  Story? byId(String id) {
+    for (final s in stories) {
+      if (s.id == id) return s;
+    }
+    return null;
+  }
+}

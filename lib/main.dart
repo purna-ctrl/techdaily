@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -10,21 +11,27 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'core/app_scope.dart';
 import 'core/config/app_config.dart';
 import 'core/constants/app_constants.dart';
+import 'core/stories_scope.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 import 'models/article.dart';
+import 'models/story.dart';
 import 'repositories/article_repository.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/firestore_article_repository.dart';
+import 'repositories/story_repository.dart';
 import 'screens/article_screen.dart';
-import 'screens/category_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/quick_reads_screen.dart';
-import 'screens/saved_screen.dart';
-import 'screens/search_screen.dart';
+import 'screens/v2/home_feed_screen.dart';
+import 'screens/v2/saved_stories_screen.dart';
+import 'screens/v2/settings_screen.dart';
+import 'screens/v2/story_detail_screen.dart';
+import 'screens/v2/story_search_screen.dart';
 import 'services/firebase_auth_service.dart';
 import 'services/local_article_service.dart';
-import 'widgets/bottom_navigation.dart';
+import 'services/v2/newsletter_service.dart';
+import 'services/v2/sample_stories.dart';
+import 'services/v2/saved_stories.dart';
+import 'services/v2/topic_prefs.dart';
 import 'widgets/story_widgets.dart';
 
 final GlobalKey<ScaffoldMessengerState> rootMessengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -32,75 +39,83 @@ final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Clean URLs on web (`/article/<id>` instead of `/#/article/<id>`).
+  // Clean URLs on web (`/app/story/<slug>` instead of `/#/...`).
   usePathUrlStrategy();
 
-  ArticleRepository articleRepository;
-  AuthRepository authRepository;
-
-  bool isFirebaseInitialized = false;
+  bool firebaseReady = false;
   if (kDataSource != 'local') {
     try {
       final options = DefaultFirebaseOptions.currentPlatform;
       if (Firebase.apps.isEmpty) {
-        if (options != null) {
-          await Firebase.initializeApp(options: options);
-        } else {
-          await Firebase.initializeApp();
-        }
+        // Time-boxed: if the Firebase SDK is blocked (ad blockers, flaky network) the
+        // app still starts and reads stories from /data/feed.json.
+        await (options != null ? Firebase.initializeApp(options: options) : Firebase.initializeApp())
+            .timeout(const Duration(seconds: 8));
       }
-      isFirebaseInitialized = true;
+      firebaseReady = true;
     } catch (e) {
       debugPrint('Firebase initialization notice (running offline/fallback): $e');
     }
   }
 
-  if (isFirebaseInitialized) {
-    final firestoreRepo = FirestoreArticleRepository();
-    articleRepository = firestoreRepo;
-    authRepository = FirebaseAuthService();
-
-    // Bind bookmarks to the signed-in user; guest saves merge in on sign-in.
-    unawaited(firestoreRepo.bindUserBookmarks(authRepository.currentUser?.uid));
-    authRepository.authStateChanges.listen((user) {
-      firestoreRepo.bindUserBookmarks(user?.uid);
-    });
-    unawaited(_listenForForegroundPush(articleRepository));
+  final StoryRepository stories;
+  final AuthRepository auth;
+  final ArticleRepository legacyArticles;
+  final SavedStoriesController saved;
+  final NewsletterService newsletter;
+  if (firebaseReady) {
+    stories = HostedStoryRepository(firestore: FirebaseFirestore.instance);
+    auth = FirebaseAuthService();
+    legacyArticles = FirestoreArticleRepository();
+    saved = SavedStoriesController(remote: FirestoreSavedStoriesRemote());
+    newsletter = FirestoreNewsletterService();
+    unawaited(_listenForForegroundPush());
   } else {
-    articleRepository = LocalArticleRepository(articleService: LocalArticleService());
-    authRepository = LocalAuthRepository();
+    // Offline demo uses bundled sample stories; if Firebase merely failed to start,
+    // stories still load from the pre-rendered /data/feed.json.
+    stories = kDataSource == 'local' ? InMemoryStoryRepository(sampleStoryFeed()) : HostedStoryRepository();
+    auth = LocalAuthRepository();
+    legacyArticles = LocalArticleRepository(articleService: LocalArticleService());
+    saved = SavedStoriesController();
+    newsletter = LocalNewsletterService();
   }
 
   runApp(TechDailyApp(
-    repository: articleRepository,
-    authRepository: authRepository,
+    stories: stories,
+    authRepository: auth,
+    legacyArticles: legacyArticles,
+    saved: saved,
+    newsletter: newsletter,
   ));
 }
 
-/// Shows a snackbar for pushes received while the app is open and opens the
-/// article when a notification carrying `articleId` is tapped. Fully guarded.
-Future<void> _listenForForegroundPush(ArticleRepository repository) async {
+String? _routeFromPush(RemoteMessage? m) {
+  final slug = m?.data['slug'] as String?;
+  if (slug != null && slug.isNotEmpty) return storyRoutePath(slug);
+  final articleId = m?.data['articleId'] as String?;
+  if (articleId != null && articleId.isNotEmpty) return articleRoutePath(articleId);
+  return null;
+}
+
+/// Snackbar for pushes received while the app is open; opens the story when a
+/// notification is tapped. Fully guarded.
+Future<void> _listenForForegroundPush() async {
   try {
     if (!await FirebaseMessaging.instance.isSupported()) return;
     FirebaseMessaging.onMessage.listen((message) {
       final title = message.notification?.title;
       if (title == null) return;
-      final articleId = message.data['articleId'] as String?;
+      final route = _routeFromPush(message);
       rootMessengerKey.currentState?.showSnackBar(SnackBar(
-        content: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-        action: articleId == null
+        content: Text('$title: ${message.notification?.body ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis),
+        action: route == null
             ? null
-            : SnackBarAction(
-                label: 'Read',
-                onPressed: () => rootNavigatorKey.currentState?.pushNamed(articleRoutePath(articleId)),
-              ),
+            : SnackBarAction(label: 'Read', onPressed: () => rootNavigatorKey.currentState?.pushNamed(route)),
       ));
     });
     void openFrom(RemoteMessage? m) {
-      final id = m?.data['articleId'] as String?;
-      if (id != null && id.isNotEmpty) {
-        rootNavigatorKey.currentState?.pushNamed(articleRoutePath(id));
-      }
+      final route = _routeFromPush(m);
+      if (route != null) rootNavigatorKey.currentState?.pushNamed(route);
     }
 
     FirebaseMessaging.onMessageOpenedApp.listen(openFrom);
@@ -111,13 +126,21 @@ Future<void> _listenForForegroundPush(ArticleRepository repository) async {
 }
 
 class TechDailyApp extends StatefulWidget {
-  final ArticleRepository repository;
+  final StoryRepository stories;
   final AuthRepository authRepository;
+  final ArticleRepository? legacyArticles;
+  final SavedStoriesController? saved;
+  final TopicPrefs? topics;
+  final NewsletterService? newsletter;
 
   const TechDailyApp({
     super.key,
-    required this.repository,
+    required this.stories,
     required this.authRepository,
+    this.legacyArticles,
+    this.saved,
+    this.topics,
+    this.newsletter,
   });
 
   @override
@@ -125,79 +148,115 @@ class TechDailyApp extends StatefulWidget {
 }
 
 class _TechDailyAppState extends State<TechDailyApp> {
-  final ValueNotifier<ThemeMode> _themeModeNotifier = ValueNotifier<ThemeMode>(ThemeMode.system);
+  // TechDaily is dark-first (ink #0B0B0F).
+  final ValueNotifier<ThemeMode> _themeModeNotifier = ValueNotifier<ThemeMode>(ThemeMode.dark);
+  late final SavedStoriesController _saved = widget.saved ?? SavedStoriesController();
+  late final TopicPrefs _topics = widget.topics ?? TopicPrefs();
+  late final NewsletterService _newsletter = widget.newsletter ?? LocalNewsletterService();
+  late final ArticleRepository _legacy = widget.legacyArticles ?? LocalArticleRepository(articleService: LocalArticleService());
+  StreamSubscription<dynamic>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.topics == null) unawaited(_topics.load());
+    unawaited(_saved.bind(widget.authRepository.currentUser?.uid));
+    _authSub = widget.authRepository.authStateChanges.listen((u) => _saved.bind(u?.uid));
+  }
 
   @override
   void dispose() {
+    _authSub?.cancel();
     _themeModeNotifier.dispose();
     super.dispose();
   }
 
-  Route<dynamic>? _onGenerateRoute(RouteSettings settings) {
-    final name = settings.name ?? '/';
-    final articleId = articleIdFromRoute(name);
-    if (articleId != null) {
-      final initial = settings.arguments is Article ? settings.arguments as Article : null;
-      return MaterialPageRoute(
+  Route<dynamic> _shell(RouteSettings settings, {int tab = 0, String? category, String? query}) => MaterialPageRoute(
         settings: settings,
-        builder: (_) => ArticleRouteScreen(
-          articleId: articleId,
-          initialArticle: initial,
-          repository: widget.repository,
-          authRepository: widget.authRepository,
-        ),
+        builder: (_) => TechDailyMainShell(initialTab: tab, initialCategory: category, initialQuery: query),
       );
+
+  Route<dynamic>? _routeFor(RouteSettings settings) {
+    final r = AppRoute.parse(settings.name);
+    switch (r.kind) {
+      case AppRouteKind.home:
+        return _shell(const RouteSettings(name: '/'));
+      case AppRouteKind.story:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => StoryRouteScreen(slug: r.param!, initial: settings.arguments is Story ? settings.arguments as Story : null),
+        );
+      case AppRouteKind.category:
+        return _shell(settings, category: r.param);
+      case AppRouteKind.search:
+        return _shell(settings, tab: 1, query: r.param);
+      case AppRouteKind.saved:
+        return _shell(settings, tab: 2);
+      case AppRouteKind.settings:
+        return _shell(settings, tab: 3);
+      case AppRouteKind.newsletter:
+        return MaterialPageRoute(settings: settings, builder: (_) => NewsletterScreen(email: r.param));
+      case AppRouteKind.about:
+        return MaterialPageRoute(settings: settings, builder: (_) => const AboutScreen());
+      case AppRouteKind.legacyArticle:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => ArticleRouteScreen(
+            articleId: r.param!,
+            initialArticle: settings.arguments is Article ? settings.arguments as Article : null,
+            repository: _legacy,
+            authRepository: widget.authRepository,
+          ),
+        );
+      case AppRouteKind.unknown:
+        return null;
     }
-    if (name == '/' || name.isEmpty) {
-      return MaterialPageRoute(
-        settings: const RouteSettings(name: '/'),
-        builder: (_) => TechDailyMainShell(
-          repository: widget.repository,
-          authRepository: widget.authRepository,
-          themeModeNotifier: _themeModeNotifier,
-        ),
-      );
-    }
-    // Intermediate path segments (e.g. '/article') are skipped.
-    return null;
+  }
+
+  /// Deep links: the home feed sits under a story/about page so Back works.
+  List<Route<dynamic>> _initialRoutes(String name) {
+    final r = AppRoute.parse(name);
+    final route = _routeFor(RouteSettings(name: name));
+    if (route == null || r.kind == AppRouteKind.home) return [_shell(const RouteSettings(name: '/'))];
+    final overShell = {AppRouteKind.story, AppRouteKind.newsletter, AppRouteKind.about, AppRouteKind.legacyArticle};
+    return overShell.contains(r.kind) ? [_shell(const RouteSettings(name: '/')), route] : [route];
   }
 
   @override
   Widget build(BuildContext context) {
-    return AppScope(
-      repository: widget.repository,
-      authRepository: widget.authRepository,
-      themeModeNotifier: _themeModeNotifier,
-      child: ValueListenableBuilder<ThemeMode>(
-        valueListenable: _themeModeNotifier,
-        builder: (context, currentMode, _) {
-          return MaterialApp(
-            title: 'TechDaily — Tech news in simple words',
+    return StoriesScope(
+      stories: widget.stories,
+      saved: _saved,
+      topics: _topics,
+      newsletter: _newsletter,
+      auth: widget.authRepository,
+      child: AppScope(
+        repository: _legacy,
+        authRepository: widget.authRepository,
+        themeModeNotifier: _themeModeNotifier,
+        child: ValueListenableBuilder<ThemeMode>(
+          valueListenable: _themeModeNotifier,
+          builder: (context, mode, _) => MaterialApp(
+            title: kAppTitle,
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
-            themeMode: currentMode,
+            themeMode: mode,
             scrollBehavior: const _AppScrollBehavior(),
             navigatorKey: rootNavigatorKey,
             scaffoldMessengerKey: rootMessengerKey,
             initialRoute: '/',
-            onGenerateRoute: _onGenerateRoute,
-            onUnknownRoute: (settings) => MaterialPageRoute(
-              settings: const RouteSettings(name: '/'),
-              builder: (_) => TechDailyMainShell(
-                repository: widget.repository,
-                authRepository: widget.authRepository,
-                themeModeNotifier: _themeModeNotifier,
-              ),
-            ),
-          );
-        },
+            onGenerateInitialRoutes: _initialRoutes,
+            onGenerateRoute: _routeFor,
+            onUnknownRoute: (settings) => _shell(const RouteSettings(name: '/')),
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Loads an article by id for deep links (`/article/<id>`).
+/// Legacy v1 deep links (`/article/<id>`) still open the old article screen.
 class ArticleRouteScreen extends StatefulWidget {
   final String articleId;
   final Article? initialArticle;
@@ -222,18 +281,7 @@ class _ArticleRouteScreenState extends State<ArticleRouteScreen> {
   @override
   void initState() {
     super.initState();
-    _future = widget.initialArticle != null
-        ? Future.value(widget.initialArticle)
-        : _fetch();
-  }
-
-  Future<Article?> _fetch() async {
-    try {
-      return await widget.repository.getArticleById(widget.articleId);
-    } catch (e) {
-      debugPrint('Deep link fetch failed: $e');
-      rethrow;
-    }
+    _future = widget.initialArticle != null ? Future.value(widget.initialArticle) : widget.repository.getArticleById(widget.articleId);
   }
 
   @override
@@ -243,11 +291,7 @@ class _ArticleRouteScreenState extends State<ArticleRouteScreen> {
       builder: (context, snap) {
         final article = snap.data;
         if (article != null) {
-          return ArticleScreen(
-            article: article,
-            repository: widget.repository,
-            authRepository: widget.authRepository,
-          );
+          return ArticleScreen(article: article, repository: widget.repository, authRepository: widget.authRepository);
         }
         final loading = snap.connectionState != ConnectionState.done;
         return Scaffold(
@@ -264,16 +308,12 @@ class _ArticleRouteScreenState extends State<ArticleRouteScreen> {
           body: loading
               ? const Center(child: CircularProgressIndicator())
               : FriendlyState(
-                  icon: snap.hasError ? Icons.wifi_off_rounded : Icons.article_outlined,
-                  title: snap.hasError ? 'Couldn’t load this story' : 'Story not found',
-                  message: snap.hasError
-                      ? 'Check your connection and try again.'
-                      : 'It may have been removed. Here’s what’s new instead.',
-                  actionLabel: snap.hasError ? 'Try again' : 'Go to home',
-                  actionIcon: snap.hasError ? Icons.refresh_rounded : Icons.home_rounded,
-                  onAction: snap.hasError
-                      ? () => setState(() => _future = _fetch())
-                      : () => Navigator.of(context).pushReplacementNamed('/'),
+                  icon: Icons.article_outlined,
+                  title: 'Story not found',
+                  message: 'This older link has moved. Here’s what’s new instead.',
+                  actionLabel: 'Go to home',
+                  actionIcon: Icons.home_rounded,
+                  onAction: () => Navigator.of(context).pushReplacementNamed('/'),
                 ),
         );
       },
@@ -281,42 +321,31 @@ class _ArticleRouteScreenState extends State<ArticleRouteScreen> {
   }
 }
 
+/// Bottom navigation: Home · Search · Saved · Settings.
 class TechDailyMainShell extends StatefulWidget {
-  final ArticleRepository repository;
-  final AuthRepository authRepository;
-  final ValueNotifier<ThemeMode> themeModeNotifier;
-
-  const TechDailyMainShell({
-    super.key,
-    required this.repository,
-    required this.authRepository,
-    required this.themeModeNotifier,
-  });
+  final int initialTab;
+  final String? initialCategory;
+  final String? initialQuery;
+  const TechDailyMainShell({super.key, this.initialTab = 0, this.initialCategory, this.initialQuery});
 
   @override
   State<TechDailyMainShell> createState() => _TechDailyMainShellState();
 }
 
 class _TechDailyMainShellState extends State<TechDailyMainShell> {
-  int _currentIndex = 0;
-  final Set<int> _visited = {0};
+  late int _index = widget.initialTab.clamp(0, 3);
+  late final Set<int> _visited = {_index};
 
-  Widget _screenFor(int index) {
-    switch (index) {
+  Widget _screen(int i) {
+    switch (i) {
       case 0:
-        return HomeScreen(
-          repository: widget.repository,
-          authRepository: widget.authRepository,
-          themeModeNotifier: widget.themeModeNotifier,
-        );
+        return HomeFeedScreen(initialCategory: widget.initialCategory);
       case 1:
-        return QuickReadsScreen(repository: widget.repository, authRepository: widget.authRepository);
+        return StorySearchScreen(initialQuery: widget.initialQuery);
       case 2:
-        return CategoryScreen(repository: widget.repository, authRepository: widget.authRepository);
-      case 3:
-        return SearchScreen(repository: widget.repository, authRepository: widget.authRepository);
+        return const SavedStoriesScreen();
       default:
-        return SavedScreen(repository: widget.repository, authRepository: widget.authRepository);
+        return const SettingsScreen();
     }
   }
 
@@ -324,25 +353,31 @@ class _TechDailyMainShellState extends State<TechDailyMainShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
-        children: List.generate(
-          5,
-          // Build tabs lazily on first visit, then keep their state.
-          (i) => _visited.contains(i) ? _screenFor(i) : const SizedBox.shrink(),
-        ),
+        index: _index,
+        children: List.generate(4, (i) => _visited.contains(i) ? _screen(i) : const SizedBox.shrink()),
       ),
-      bottomNavigationBar: TechDailyBottomNav(
-        currentIndex: _currentIndex,
-        onTabSelected: (i) => setState(() {
-          _currentIndex = i;
-          _visited.add(i);
-        }),
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(border: Border(top: BorderSide(color: AppTheme.borderOf(context)))),
+        child: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (i) => setState(() {
+            _index = i;
+            _visited.add(i);
+          }),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+            NavigationDestination(icon: Icon(Icons.search_rounded), label: 'Search'),
+            NavigationDestination(icon: Icon(Icons.bookmark_border_rounded), selectedIcon: Icon(Icons.bookmark_rounded), label: 'Saved'),
+            NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings_rounded), label: 'Settings'),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Lets mouse/trackpad users drag lists and swipe Quick Reads on web/desktop.
+/// Lets mouse/trackpad users drag lists on web/desktop.
 class _AppScrollBehavior extends MaterialScrollBehavior {
   const _AppScrollBehavior();
 

@@ -12,6 +12,7 @@ on:
       - 'firestore.rules'
       - 'firestore.indexes.json'
       - 'firebase.json'
+      - 'functions/src/stories/render/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
@@ -22,6 +23,9 @@ permissions:
 concurrency:
   group: techdaily-deploy
   cancel-in-progress: true
+
+env:
+  FIREBASE_PROJECT_ID: techdaily-prod
 
 jobs:
   deploy:
@@ -40,9 +44,21 @@ jobs:
       - run: flutter pub get
       - run: flutter build web --release
 
+      # Share the pristine build with the hourly news workflow (it renders into a copy).
+      - uses: actions/cache/save@v4
+        continue-on-error: true # key may already exist
+        with:
+          path: build/web
+          key: flutter-web-${{ hashFiles('lib/**', 'web/**', 'assets/**', 'pubspec.yaml', 'pubspec.lock') }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - run: npm ci
+        working-directory: functions
 
       - id: auth
         uses: google-github-actions/auth@v2
@@ -51,6 +67,17 @@ jobs:
           service_account: 'github-deployer@techdaily-prod.iam.gserviceaccount.com'
           create_credentials_file: true
           export_environment_variables: true
+
+      - name: Restore story cache
+        uses: actions/cache/restore@v4
+        with:
+          path: functions/.cache/stories.json
+          key: stories-cache-deploy-${{ github.run_id }}
+          restore-keys: stories-cache-
+
+      - name: Render static pages into build/web
+        working-directory: functions
+        run: npx tsx src/jobs.ts render --cache=.cache/stories.json --out=../build/web
 
       - name: Deploy hosting + Firestore rules/indexes
         # firebase-tools picks up GOOGLE_APPLICATION_CREDENTIALS exported by the auth step.
