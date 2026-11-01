@@ -47,5 +47,7 @@ jobs:
       - name: Run ingestion
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MAX_CALLS_PER_RUN: '30'
+          GEMINI_MIN_INTERVAL_MS: '7000'
           FIREBASE_PROJECT_ID: techdaily-prod
         run: npx tsx src/jobs.ts ingest --concurrency=3 ${{ inputs.dry_run && '--dry-run' || '' }}

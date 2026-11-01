@@ -11,6 +11,33 @@ export interface ServerAiSummarizerConfig {
   fetchFn?: typeof fetch;
 }
 
+/**
+ * Free-tier guard (shared across instances in one process): caps Gemini calls per run, spaces them
+ * out, and stops calling after a 429 so the rest of the run uses the rule-based fallback. Articles
+ * left on the fallback are re-enriched by later runs.
+ *   GEMINI_MAX_CALLS_PER_RUN (default: unlimited), GEMINI_MIN_INTERVAL_MS (default: 0)
+ */
+const geminiBudget = { calls: 0, rateLimited: false, nextSlot: 0 };
+export function resetGeminiBudget(): void {
+  geminiBudget.calls = 0;
+  geminiBudget.rateLimited = false;
+  geminiBudget.nextSlot = 0;
+}
+async function takeGeminiSlot(): Promise<boolean> {
+  const max = parseInt(process.env.GEMINI_MAX_CALLS_PER_RUN || '', 10);
+  if (geminiBudget.rateLimited) return false;
+  if (Number.isFinite(max) && max >= 0 && geminiBudget.calls >= max) return false;
+  geminiBudget.calls++;
+  const gap = parseInt(process.env.GEMINI_MIN_INTERVAL_MS || '', 10);
+  if (Number.isFinite(gap) && gap > 0) {
+    const now = Date.now();
+    const at = Math.max(now, geminiBudget.nextSlot);
+    geminiBudget.nextSlot = at + gap;
+    if (at > now) await new Promise((r) => setTimeout(r, at - now));
+  }
+  return !geminiBudget.rateLimited;
+}
+
 export class ServerAiSummarizer implements AiSummarizer {
   private apiKey?: string;
   private model: string;
@@ -34,6 +61,10 @@ export class ServerAiSummarizer implements AiSummarizer {
   async summarize(input: AiSummarizationInput): Promise<AiSummarizationOutput> {
     if (!this.apiKey) {
       // Offline / Keyless environment -> use deterministic fallback
+      return this.fallback.summarize(input);
+    }
+
+    if (!(await takeGeminiSlot())) {
       return this.fallback.summarize(input);
     }
 
@@ -83,6 +114,7 @@ export class ServerAiSummarizer implements AiSummarizer {
       clearTimeout(timer);
 
       if (!response.ok) {
+        if (response.status === 429) geminiBudget.rateLimited = true;
         const errorBody = await response.text();
         throw new Error(`Gemini API responded with HTTP ${response.status}: ${errorBody}`);
       }
