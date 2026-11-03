@@ -46,6 +46,9 @@ double _overlap(List<String> q, List<String> t) {
 List<String> _sentences(String t) =>
     t.split(RegExp(r'(?<=[.!?])\s+')).map((x) => x.trim()).where((x) => x.length > 3).toList();
 
+const String kAskNotQuestion =
+    'Try asking a question about this story — for example “Does this affect India?” or one of the questions above.';
+
 /// Answers a reader's question from the story alone (no network): its FAQ,
 /// the jargon dictionary, then the best-matching sentence of its sections.
 AskAnswer answerLocally(Story s, String question) {
@@ -64,7 +67,17 @@ AskAnswer answerLocally(Story s, String question) {
       best = f;
     }
   }
-  if (best != null && bestScore >= 0.5) return AskAnswer(best.a, AskSource.faq);
+  // A question must share most of its words (and at least two) with the FAQ question.
+  final faqHits = best == null ? 0 : qt.where(_tokens(best.q).toSet().contains).length;
+  if (best != null && bestScore >= 0.67 && (faqHits >= 2 || qt.length == 1)) {
+    return AskAnswer(best.a, AskSource.faq);
+  }
+
+  // Statements / opinions ("reddit is useful") aren't questions: don't guess.
+  final looksLikeQuestion = q.contains('?') ||
+      RegExp(r'^(what|whats|how|why|when|where|who|which|is|are|was|will|can|could|should|does|do|did|has|have|explain|tell|define)\b')
+          .hasMatch(lower);
+  if (!looksLikeQuestion) return const AskAnswer(kAskNotQuestion, AskSource.none);
 
   // 2. "What is / what does X mean?" -> jargon dictionary.
   if (RegExp(r'\b(what|mean|meaning|explain|define)\b').hasMatch(lower)) {
@@ -128,10 +141,9 @@ AskAnswer answerLocally(Story s, String question) {
       bestS = t;
     }
   }
-  // At least a third of the question's words (min 1, and 2 once the question has 6+ words).
-  final need = qt.length >= 6 ? 2 : (qt.length / 3).ceil().clamp(1, 2);
+  // At least a third of the question's words (min 1, and 2 once the question has 5+ words).
+  final need = qt.length >= 5 ? 2 : (qt.length / 3).ceil().clamp(1, 2);
   if (bestS != null && bestN >= need) return AskAnswer(bestS, AskSource.story);
-  if (best != null && bestScore >= 0.34) return AskAnswer(best.a, AskSource.faq);
   return const AskAnswer(kAskNoAnswer, AskSource.none);
 }
 

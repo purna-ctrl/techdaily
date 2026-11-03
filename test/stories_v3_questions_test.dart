@@ -109,6 +109,10 @@ void main() {
       final none = answerLocally(s, 'Will Bitcoin go up tomorrow?');
       expect(none.unanswered, isTrue);
       expect(none.text, contains('sources'));
+      // A statement that shares a keyword with an FAQ question must not get that answer.
+      final stmt = answerLocally(s, 'satellite is useful');
+      expect(stmt.unanswered, isTrue);
+      expect(stmt.text, contains('Try asking'));
     });
 
     test('uses ASK_ENDPOINT when set and falls back to the device when it fails', () async {
