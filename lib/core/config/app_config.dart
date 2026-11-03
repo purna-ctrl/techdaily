@@ -48,7 +48,7 @@ const String kDataSource = String.fromEnvironment(
 /// Worker (`workers/ask/`) URL, here or at build time with
 /// `--dart-define=ASK_ENDPOINT=https://techdaily-ask.<you>.workers.dev/ask`.
 /// Contract: POST JSON `{slug, question, story}` -> `{answer}`.
-const String kAskEndpoint = String.fromEnvironment('ASK_ENDPOINT', defaultValue: '');
+const String kAskEndpoint = String.fromEnvironment('ASK_ENDPOINT', defaultValue: 'https://techdaily-ask.purnabannu1488.workers.dev');
 
 /// Longest question the ask box accepts (the Worker enforces the same).
 const int kAskMaxChars = 300;

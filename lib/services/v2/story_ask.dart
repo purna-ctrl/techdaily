@@ -189,7 +189,7 @@ class StoryAskService {
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         final a = body is Map ? (body['answer'] ?? '').toString().trim() : '';
-        if (a.isNotEmpty) return AskAnswer(a, AskSource.remote);
+        if (a.isNotEmpty) return AskAnswer(a, a == kAskNoAnswer ? AskSource.none : AskSource.remote);
       }
     } catch (_) {
       // Network / timeout / bad JSON: answer from the story instead.
