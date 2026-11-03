@@ -42,6 +42,21 @@ void main() {
     expect(storyCategoryById('money-fintech').color.toARGB32(), 0xFFEAB308);
   });
 
+  test('the seven newer categories follow the first eight, with distinct colours and short labels', () {
+    expect(kStoryCategories.map((c) => c.id).toList(), [
+      'scams-security', 'ai', 'phones-gadgets', 'chips-hardware', 'startups-india', 'innovations', 'money-fintech', 'privacy',
+      'telecom', 'digital-india', 'ev-mobility', 'space', 'apps-gaming', 'health-tech', 'jobs-skills',
+    ]);
+    final colours = [kTopStories, ...kStoryCategories].map((c) => c.color.toARGB32()).toSet();
+    expect(colours, hasLength(kStoryCategories.length + 1));
+    expect(storyCategoryById('telecom').label, 'Telecom & Internet');
+    expect(storyCategoryById('jobs-skills').shortLabel, 'Jobs');
+    expect(storyCategoryById('ev-mobility').shortLabel, 'EVs');
+    expect(isStoryCategoryId('space'), isTrue);
+    // Unknown ids still fall back to Innovations.
+    expect(storyCategoryById('nope').id, 'innovations');
+  });
+
   test('jargon: whole words, acronyms case-sensitive, no overlaps, ~40+ terms', () {
     expect(kJargon.length, greaterThanOrEqualTo(40));
     final hits = findJargon('Never share your UPI PIN or OTP. The LLM uses a chip; it is not IT.');

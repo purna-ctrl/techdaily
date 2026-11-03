@@ -222,6 +222,9 @@ void main() {
 
     final field = find.byKey(const ValueKey('newsletter-email'));
     await tester.scrollUntilVisible(field, 200, scrollable: find.byType(Scrollable).last);
+    // Centre the form (the Topics list above it is long) so the submit button is hittable.
+    await Scrollable.ensureVisible(tester.element(field), alignment: 0.5);
+    await tester.pumpAndSettle();
     await tester.enterText(field, 'not-an-email');
     await tester.tap(find.byKey(const ValueKey('newsletter-submit')));
     await tester.pumpAndSettle();

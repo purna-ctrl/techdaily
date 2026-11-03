@@ -12,10 +12,11 @@ import { classify, CategoryId } from './categories';
 import { clusterItems, Cluster, ClusterSeed } from './clusterer';
 import { isLowValueTitle, STORY_FEEDS, StoryFeed } from './feeds';
 import { pickTodayInFive, TodayInFive } from './ranking';
-import { StoryCache, writeStories, writeTodayInFive } from './story-store';
+import { StoryCache, writeStories, writeTodayInFive, deleteStories } from './story-store';
 import { fallbackStory, StoryWriter, WriterInput, WriterSource, WrittenStory, WriterStats } from './story-writer';
 import { sha, storyIdFor, storySlug } from './text';
 import { NewsItem, Story, StorySource } from './types';
+import { isNonTechStory, isTechItem, storyTechVerdict } from './tech-filter';
 import { ImageCandidate, ImageResolveStats, pickBestImage, resolveMissingImages, storedImageScore, imageScore, SourcedCandidate } from './images';
 
 type Db = FirebaseFirestore.Firestore;
@@ -27,6 +28,8 @@ export interface FeedStat {
   status: 'ok' | 'failed';
   parsed: number;
   kept: number;
+  /** Items dropped by the tech gate (not technology news). */
+  nonTech?: number;
   error?: string;
 }
 
@@ -50,6 +53,8 @@ export interface StoryIngestOptions {
   imageFetchBudget?: number;
   /** Override for tests: returns the og:image of a page. */
   fetchOgImage?: (url: string) => Promise<ImageCandidate | undefined>;
+  /** Skip removing already-stored non-tech stories this run (default: remove them). */
+  keepNonTechStories?: boolean;
 }
 
 export interface SourceImageStat {
@@ -90,6 +95,12 @@ export interface StoryIngestResult {
   today: TodayInFive;
   pushes: number;
   images: ImageReport;
+  /** Feed items dropped by the keyword tech gate. */
+  nonTechItems: number;
+  /** New clusters / enriched stories the AI judged not to be technology news (discarded). */
+  nonTechByAi: number;
+  /** Stored stories removed as non-tech (cache always; Firestore too unless dry run). */
+  nonTechRemoved: string[];
 }
 
 const UA = 'Mozilla/5.0 (compatible; TechDailyBot/2.0; +https://techdaily-prod.web.app)';
@@ -121,9 +132,10 @@ export function canonical(url: string): string {
 }
 
 /** Parses one feed's XML into normalised, validated, recent items. */
-export function itemsFromFeed(feed: StoryFeed, xml: string, now: number, maxAgeHours: number): { parsed: number; items: NewsItem[] } {
+export function itemsFromFeed(feed: StoryFeed, xml: string, now: number, maxAgeHours: number): { parsed: number; items: NewsItem[]; nonTech: number } {
   const raw = FeedParser.parse(xml);
   const out: NewsItem[] = [];
+  let nonTech = 0;
   for (const r of raw) {
     if (!r.title || !r.link) continue;
     const link = r.link.trim();
@@ -136,6 +148,11 @@ export function itemsFromFeed(feed: StoryFeed, xml: string, now: number, maxAgeH
     const t = Math.min(published.getTime(), now);
     if (now - t > maxAgeHours * HOUR) continue;
     if (feed.includePattern && !feed.includePattern.test(title) && !feed.includePattern.test(snippet.slice(0, 400))) continue;
+    // Purely tech: drop politics, sports, celebrity, stock-market-only and other non-tech items.
+    if (!isTechItem(title, snippet, { mixedSource: feed.mixed })) {
+      nonTech++;
+      continue;
+    }
     out.push({
       sourceId: feed.sourceId,
       sourceName: feed.sourceName,
@@ -151,7 +168,7 @@ export function itemsFromFeed(feed: StoryFeed, xml: string, now: number, maxAgeH
     });
   }
   out.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
-  return { parsed: raw.length, items: out.slice(0, feed.maxItemsPerRun ?? 12) };
+  return { parsed: raw.length, items: out.slice(0, feed.maxItemsPerRun ?? 12), nonTech };
 }
 
 export async function fetchAllFeeds(
@@ -171,7 +188,7 @@ export async function fetchAllFeeds(
       try {
         const xml = await fetchText(feed.feedUrl);
         const r = itemsFromFeed(feed, xml, now, maxAgeHours);
-        stats[i] = { sourceId: feed.sourceId, status: r.parsed > 0 ? 'ok' : 'failed', parsed: r.parsed, kept: r.items.length, ...(r.parsed === 0 ? { error: 'no parseable items' } : {}) };
+        stats[i] = { sourceId: feed.sourceId, status: r.parsed > 0 ? 'ok' : 'failed', parsed: r.parsed, kept: r.items.length, nonTech: r.nonTech, ...(r.parsed === 0 ? { error: 'no parseable items' } : {}) };
         items[i] = r.items;
       } catch (e: any) {
         stats[i] = { sourceId: feed.sourceId, status: 'failed', parsed: 0, kept: 0, error: String(e?.message || e) };
@@ -323,6 +340,16 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
   let feeds = (opts.feeds ?? STORY_FEEDS).filter((f) => f.enabled);
   if (opts.sourceIds?.length) feeds = feeds.filter((f) => opts.sourceIds!.includes(f.sourceId));
 
+  // 0. Purely tech: remove stored stories that are clearly not technology news (cache always, so
+  //    they also leave the rendered site; Firestore when not a dry run).
+  const nonTechRemoved: string[] = [];
+  const removeStory = (s: Story) => {
+    for (const x of s.sources) cache.block(canonical(x.url));
+    cache.stories.delete(s.id);
+    nonTechRemoved.push(s.id);
+  };
+  if (!opts.keepNonTechStories) findNonTechStories(cache.all()).forEach(removeStory);
+
   // 1. Fetch
   const { stats, items } = await fetchAllFeeds(feeds, opts.fetchText ?? defaultFetchText, now, opts.maxAgeHours ?? 48, opts.concurrency ?? 6);
   const snippetByUrl = new Map(items.map((i) => [i.canonicalUrl, i.snippet]));
@@ -330,7 +357,7 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
   // 2. Skip reports already inside a story
   const known = new Map<string, string>();
   for (const s of cache.stories.values()) for (const x of s.sources) known.set(canonical(x.url), s.id);
-  const fresh = items.filter((i) => !known.has(i.canonicalUrl));
+  const fresh = items.filter((i) => !known.has(i.canonicalUrl) && !cache.blocked.has(i.canonicalUrl));
 
   // 3. Cluster new reports with each other and onto recent stories
   const windowMs = 48 * HOUR;
@@ -349,6 +376,7 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
   let updated = 0;
   let enriched = 0;
   let pushes = 0;
+  let nonTechByAi = 0;
   const slugs = cache.slugIndex();
 
   // 3b. Existing stories that gained sources
@@ -391,6 +419,12 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
     // Past the time budget: still create the story, but with the fallback writer (no AI wait).
     const w = Date.now() < deadline ? await writer.write(input, true) : fallbackStory(input);
     if (!w) continue;
+    if (!w.isTech) {
+      // Gemini judged it not technology news: discard (and don't ask again next run).
+      nonTechByAi++;
+      for (const i of c.items) cache.block(i.canonicalUrl);
+      continue;
+    }
     const s = newStory(c.items, w, nowIso, slugs);
     cache.upsert(s);
     changed.set(s.id, s);
@@ -435,6 +469,12 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
       categoryHint: s.category,
     };
     const w = await writer.write(input, false);
+    if (w && !w.isTech) {
+      nonTechByAi++;
+      changed.delete(s.id);
+      removeStory(s);
+      continue;
+    }
     const next: Story = w ? applyWritten(s, w, nowIso) : { ...s, enrichAttempts: s.enrichAttempts + 1, updatedAt: nowIso };
     if (w) {
       next.enrichAttempts = s.enrichAttempts + 1;
@@ -461,6 +501,7 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
   let writes = 0;
   const changedList = [...changed.values()];
   if (!dry && deps.db) {
+    if (nonTechRemoved.length) writes += await deleteStories(deps.db, nonTechRemoved);
     writes += await writeStories(deps.db, changedList);
     // Private snippets (input for later re-enrichment; never client-readable).
     const entries = [...privateSnippets.entries()];
@@ -518,5 +559,15 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
     changed: changedList,
     today,
     pushes,
+    nonTechItems: stats.reduce((n, f) => n + (f.nonTech ?? 0), 0),
+    nonTechByAi,
+    nonTechRemoved,
   };
 }
+
+/** Stored stories that fail the (conservative) tech check. Used by ingest and `purge-non-tech`. */
+export function findNonTechStories(stories: Story[]): Story[] {
+  return stories.filter((s) => isNonTechStory(s));
+}
+
+export { storyTechVerdict };

@@ -97,6 +97,18 @@ export class StoryCache {
   stories = new Map<string, Story>();
   maxUpdatedAt = '';
   syncedAt = '';
+  /**
+   * Canonical report URLs judged not technology news (removed stories, AI-discarded clusters).
+   * Skipped by later runs so the same report is not re-written (or re-sent to Gemini) every hour.
+   */
+  blocked = new Set<string>();
+  static readonly MAX_BLOCKED = 3000;
+
+  block(url: string): void {
+    this.blocked.delete(url);
+    this.blocked.add(url);
+    while (this.blocked.size > StoryCache.MAX_BLOCKED) this.blocked.delete(this.blocked.values().next().value as string);
+  }
 
   static load(file?: string): StoryCache {
     const c = new StoryCache();
@@ -107,6 +119,7 @@ export class StoryCache {
       for (const s of list) c.upsert(docToStory(s));
       if (typeof raw?.maxUpdatedAt === 'string') c.maxUpdatedAt = raw.maxUpdatedAt;
       if (typeof raw?.syncedAt === 'string') c.syncedAt = raw.syncedAt;
+      if (Array.isArray(raw?.blocked)) for (const u of raw.blocked) if (typeof u === 'string') c.block(u);
     } catch (e: any) {
       console.warn(`[StoryCache] ignoring unreadable cache ${file}: ${e?.message}`);
     }
@@ -118,7 +131,7 @@ export class StoryCache {
     fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
     fs.writeFileSync(
       file,
-      JSON.stringify({ version: 1, syncedAt: this.syncedAt, maxUpdatedAt: this.maxUpdatedAt, stories: this.all() })
+      JSON.stringify({ version: 1, syncedAt: this.syncedAt, maxUpdatedAt: this.maxUpdatedAt, stories: this.all(), blocked: [...this.blocked] })
     );
   }
 
@@ -179,6 +192,21 @@ export async function writeStories(db: Db, stories: Story[]): Promise<number> {
     written += Math.min(400, stories.length - i);
   }
   return written;
+}
+
+/** Deletes stories and their private snippets. Returns the number of documents deleted. */
+export async function deleteStories(db: Db, ids: string[]): Promise<number> {
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const batch = db.batch();
+    for (const id of ids.slice(i, i + 200)) {
+      batch.delete(db.collection(STORIES).doc(id));
+      batch.delete(db.collection('storySources').doc(id));
+    }
+    await batch.commit();
+    deleted += Math.min(200, ids.length - i) * 2;
+  }
+  return deleted;
 }
 
 export async function writeTodayInFive(db: Db, brief: TodayInFive): Promise<void> {

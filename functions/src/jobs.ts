@@ -9,6 +9,8 @@
  *   npx tsx src/jobs.ts render           [--out=../build/web] [--cache=file] [--from-json=file] [--site-url=URL]
  *   npx tsx src/jobs.ts daily-brief      [--no-push] [--cache=file]        (Today in 5 from stories + 06:00 push)
  *   npx tsx src/jobs.ts migrate-articles [--dry-run] [--limit=N] [--cache=file] (articles -> stories, articles untouched)
+ *   npx tsx src/jobs.ts purge-non-tech   [--apply] [--json-out=file]  (DRY RUN unless --apply: lists / deletes stored
+ *                                        stories that are not technology news; ingest also removes them hourly)
  * v1 (legacy `articles` collection):
  *   npx tsx src/jobs.ts ingest-articles  [--dry-run] [--source=<id>] [--concurrency=N] [--json-out=file]
  *   npx tsx src/jobs.ts purge-seed       [--dry-run]
@@ -32,8 +34,8 @@ import { AdminService, PurgeResult } from './admin/admin-service';
 import { ServerAiSummarizer } from './ai';
 import { PushService, DAILY_BRIEF_TOPIC } from './notifications/push-service';
 import { getSourceById } from './config/sources';
-import { StoryCache, syncCache, loadStoriesJson, writeTodayInFive, docToStory, STORIES } from './stories/story-store';
-import { runStoryPipeline, StoryIngestResult } from './stories/story-pipeline';
+import { StoryCache, syncCache, loadStoriesJson, writeTodayInFive, docToStory, STORIES, deleteStories } from './stories/story-store';
+import { runStoryPipeline, StoryIngestResult, findNonTechStories, storyTechVerdict } from './stories/story-pipeline';
 import { renderSite, RenderResult } from './stories/render/render';
 import { migrateArticles, MigrateResult } from './stories/migrate';
 import { pickTodayInFive, TodayInFive } from './stories/ranking';
@@ -44,12 +46,14 @@ import { ImageCandidate } from './stories/images';
 import { ImageReport } from './stories/story-pipeline';
 
 export const DEFAULT_PROJECT_ID = 'techdaily-prod';
-export const COMMANDS = ['ingest', 'render', 'daily-brief', 'migrate-articles', 'ingest-articles', 'purge-seed'] as const;
+export const COMMANDS = ['ingest', 'render', 'daily-brief', 'migrate-articles', 'ingest-articles', 'purge-seed', 'purge-non-tech'] as const;
 export type JobCommand = (typeof COMMANDS)[number];
 
 export interface JobArgs {
   command: JobCommand;
   dryRun: boolean;
+  /** purge-non-tech: actually delete (the command is a dry run without it). */
+  apply: boolean;
   push: boolean;
   source?: string;
   concurrency: number;
@@ -85,6 +89,7 @@ export function parseArgs(argv: string[]): JobArgs {
   return {
     command,
     dryRun: argv.includes('--dry-run'),
+    apply: argv.includes('--apply') && !argv.includes('--dry-run'),
     push: !argv.includes('--no-push'),
     source: val('source'),
     concurrency: int('concurrency') ?? (command === 'ingest' ? 6 : 3),
@@ -264,6 +269,34 @@ export async function runMigrate(args: JobArgs, deps: Pick<JobDeps, 'db'>): Prom
   return result;
 }
 
+export interface PurgeNonTechResult {
+  scanned: number;
+  matched: Array<{ id: string; slug: string; category: string; headline: string; reason: string }>;
+  deleted: number;
+  dryRun: boolean;
+}
+
+/**
+ * Finds stored stories that are not technology news (same conservative check ingest uses) and,
+ * only with --apply, deletes them (+ their private snippets) and refreshes "Today in 5".
+ */
+export async function runPurgeNonTech(args: JobArgs, deps: Pick<JobDeps, 'db'>): Promise<PurgeNonTechResult> {
+  if (!deps.db) throw new Error('purge-non-tech needs Firestore');
+  const snap = await deps.db.collection(STORIES).get();
+  const stories = snap.docs.map((d) => docToStory(d.data(), d.id));
+  const bad = findNonTechStories(stories);
+  const matched = bad.map((s) => ({ id: s.id, slug: s.slug, category: s.category, headline: s.headline, reason: storyTechVerdict(s).reason }));
+  const dryRun = !args.apply;
+  let deleted = 0;
+  if (!dryRun && bad.length) {
+    await deleteStories(deps.db, bad.map((s) => s.id));
+    deleted = bad.length;
+    const ids = new Set(bad.map((s) => s.id));
+    await writeTodayInFive(deps.db, pickTodayInFive(stories.filter((s) => !ids.has(s.id))));
+  }
+  return { scanned: stories.length, matched, deleted, dryRun };
+}
+
 const pct = (a: number, b: number) => (b ? `${Math.round((100 * a) / b)}%` : '-');
 
 /** Per-source image coverage: feed-declared images and stories with an image after og:image. */
@@ -335,13 +368,14 @@ async function main() {
 
   if (args.command === 'ingest') {
     const { result, ok, reads, cache } = await runStoriesIngest(args, deps);
-    console.table(result.feeds.map((f) => ({ feed: f.sourceId, status: f.status, parsed: f.parsed, kept: f.kept, error: f.error ?? '' })));
+    console.table(result.feeds.map((f) => ({ feed: f.sourceId, status: f.status, parsed: f.parsed, kept: f.kept, nonTech: f.nonTech ?? 0, error: f.error ?? '' })));
     const w = result.writer;
     const line =
       `items=${result.itemsFetched} new=${result.itemsNew} clusters=${result.clusters} (multi-source ${result.multiSourceClusters}) ` +
       `created=${result.storiesCreated} updated=${result.storiesUpdated} enriched=${result.storiesEnriched} ` +
       `ai=${w.aiOk}/${w.aiCalls} invalid=${w.aiInvalid} errors=${w.aiErrors} fallback=${w.fallbacks} rateLimited=${w.rateLimited} ` +
-      `model=${w.model} reads=${reads} writes=${result.firestoreWrites}`;
+      `model=${w.model} reads=${reads} writes=${result.firestoreWrites} ` +
+      `nonTechItems=${result.nonTechItems} nonTechByAi=${result.nonTechByAi} nonTechRemoved=${result.nonTechRemoved.length}`;
     console.log(`Totals: ${line}`);
     const imgLine = imageCoverageLine(result.images);
     console.table(imageCoverageRows(result.images));
@@ -391,6 +425,15 @@ async function main() {
     writeStepSummary(`### Ingest articles (v1) ${args.dryRun ? '(dry run)' : ''}\n\n${line}`);
     if (args.jsonOut) fs.writeFileSync(args.jsonOut, JSON.stringify(summary, null, 2));
     if (!ok) process.exitCode = 1;
+  } else if (args.command === 'purge-non-tech') {
+    const r = await runPurgeNonTech(args, deps);
+    console.table(r.matched.map((m) => ({ category: m.category, reason: m.reason, headline: m.headline.slice(0, 90) })));
+    const line = `scanned=${r.scanned} nonTech=${r.matched.length} deleted=${r.deleted}${r.dryRun ? ' (dry run: pass --apply to delete)' : ''}`;
+    console.log(`[jobs] purge-non-tech ${line}`);
+    writeStepSummary(
+      `### Purge non-tech stories ${r.dryRun ? '(dry run)' : ''}\n\n${line}\n\n${r.matched.map((m) => `- [${m.category}] ${m.headline} — ${m.reason}`).join('\n')}`
+    );
+    if (args.jsonOut) fs.writeFileSync(args.jsonOut, JSON.stringify(r, null, 2));
   } else {
     const { result, briefRegenerated } = await runPurgeSeed(args, deps);
     console.log(JSON.stringify(result, null, 2));

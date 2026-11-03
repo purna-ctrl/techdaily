@@ -29,6 +29,29 @@ export const CATEGORY_STYLE: Record<string, CategoryStyle> = {
   innovations: { color: '#06B6D4', tint: '#22D3EE', icon: 'M9 3h6 M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3 M7 15h10' },
   'money-fintech': { color: '#EAB308', tint: '#FACC15', icon: 'M7 4h11 M7 8.5h11 M7 4h3.5a4.5 4.5 0 0 1 0 9H7l7.5 7.5' },
   privacy: { color: '#14B8A6', tint: '#2DD4BF', icon: 'M6 11h12v10H6z M8 11V7a4 4 0 0 1 8 0v4 M12 15v2' },
+  telecom: {
+    color: '#E879F9',
+    tint: '#F0ABFC',
+    icon: 'M12 11v10 M9 21h6 M12 11v.01 M8.5 7.5a5 5 0 0 0 0 7 M15.5 7.5a5 5 0 0 1 0 7 M5.6 4.6a9 9 0 0 0 0 12.8 M18.4 4.6a9 9 0 0 1 0 12.8',
+  },
+  'digital-india': {
+    color: '#10B981',
+    tint: '#6EE7B7',
+    icon: 'M12 11v3a8 8 0 0 1-1.5 4.5 M8 11a4 4 0 0 1 8 0v1.5a12 12 0 0 1-1 4.5 M5 10a7 7 0 0 1 14 0v2 M8.5 14.5a10 10 0 0 1-2 4',
+  },
+  'ev-mobility': { color: '#A3E635', tint: '#D9F99D', icon: 'M13 2L5 14h6l-1 8 8-12h-6z' },
+  space: {
+    color: '#38BDF8',
+    tint: '#7DD3FC',
+    icon: 'M12 2c3 2.5 4.5 6 4.5 10l-2 4h-5l-2-4C7.5 8 9 4.5 12 2z M12 9.5v.01 M9.5 16l-2.5 3 M14.5 16l2.5 3 M12 17v4',
+  },
+  'apps-gaming': {
+    color: '#F472B6',
+    tint: '#F9A8D4',
+    icon: 'M6 8h12a4 4 0 0 1 4 4v1a4 4 0 0 1-7 2.6L14 15h-4l-1 .6A4 4 0 0 1 2 13v-1a4 4 0 0 1 4-4z M7 10.5v3 M5.5 12h3 M16 11h.01 M18 13h.01',
+  },
+  'health-tech': { color: '#FB7185', tint: '#FDA4AF', icon: 'M19.5 13.5L12 21l-7.5-7.5A4.8 4.8 0 0 1 12 6.5a4.8 4.8 0 0 1 7.5 7z M3 12h4l2-3 3 6 2-3h7' },
+  'jobs-skills': { color: '#818CF8', tint: '#A5B4FC', icon: 'M4 7h16v13H4z M9 7V4h6v3 M4 12h16 M12 11v2' },
 };
 
 export function catStyle(id: string): CategoryStyle {

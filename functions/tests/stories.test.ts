@@ -5,6 +5,7 @@ import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { classify, CATEGORY_IDS, looksLikeScam, toCategoryId } from '../src/stories/categories';
 import { clusterItems, IdfModel, titleSimilarity, titleTokens } from '../src/stories/clusterer';
 import { isLowValueTitle, isOfficialAdvisoryUrl, STORY_FEEDS } from '../src/stories/feeds';
+import { isNonTechStory, isTechItem, techVerdict } from '../src/stories/tech-filter';
 import { pickTodayInFive, rankStories, storyScore } from '../src/stories/ranking';
 import { renderSite, publicStory } from '../src/stories/render/render';
 import {
@@ -19,7 +20,7 @@ import {
   whatsappUrl,
 } from '../src/stories/render/templates';
 import { docToStory, StoryCache, storyToDoc } from '../src/stories/story-store';
-import { isDeveloping, itemsFromFeed, runStoryPipeline } from '../src/stories/story-pipeline';
+import { findNonTechStories, isDeveloping, itemsFromFeed, runStoryPipeline } from '../src/stories/story-pipeline';
 import { fallbackStory, StoryValidationError, StoryWriter, validateStoryJson, WriterInput } from '../src/stories/story-writer';
 import { cleanHeadline, escapeHtml, findCopiedRun, jsonForScript, slugify, storySlug } from '../src/stories/text';
 import { resetGeminiBudget } from '../src/ai/server-ai-summarizer';
@@ -131,7 +132,8 @@ describe('category classification', () => {
     expect(classify('TSMC starts 2nm chip production', '').category).toBe('chips-hardware');
     expect(classify('Zepto raises $400 million in Series G funding', '').category).toBe('startups-india');
     expect(classify('RBI changes rules for UPI payments and loans', '').category).toBe('money-fintech');
-    expect(classify('ISRO launches navigation satellite', '').category).toBe('innovations');
+    expect(classify('ISRO launches navigation satellite', '').category).toBe('space');
+    expect(classify('Researchers build a robot that folds laundry', '').category).toBe('innovations');
     expect(classify('New DPDP rules on personal data and consent', '').category).toBe('privacy');
   });
   test('default category breaks ties and weak matches', () => {
@@ -142,7 +144,13 @@ describe('category classification', () => {
     expect(toCategoryId('Cybersecurity')).toBe('scams-security');
     expect(toCategoryId('AI & Machine Learning')).toBe('ai');
     expect(toCategoryId('nonsense', 'ai')).toBe('ai');
-    expect(CATEGORY_IDS).toHaveLength(8);
+    expect(CATEGORY_IDS).toHaveLength(15);
+    expect(CATEGORY_IDS.slice(8)).toEqual(['telecom', 'digital-india', 'ev-mobility', 'space', 'apps-gaming', 'health-tech', 'jobs-skills']);
+    expect(toCategoryId('Telecom & Internet')).toBe('telecom');
+    expect(toCategoryId('Tech Jobs & Skills')).toBe('jobs-skills');
+    expect(toCategoryId('space')).toBe('space');
+    expect(toCategoryId('electric vehicles')).toBe('ev-mobility');
+    expect(toCategoryId('healthtech')).toBe('health-tech');
   });
   test('scam detection', () => {
     expect(looksLikeScam('Digital arrest fraud: retired teacher loses ₹20 lakh')).toBe(true);
@@ -174,6 +182,94 @@ describe('category classification', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+describe('new categories', () => {
+  test('keywords route stories to the seven newer categories', () => {
+    expect(classify('Jio hikes prepaid recharge prices, Airtel and Vi may follow', '').category).toBe('telecom');
+    expect(classify('TRAI releases new 5G spectrum auction rules', '').category).toBe('telecom');
+    expect(classify('UIDAI makes Aadhaar face authentication mandatory for DigiLocker', '').category).toBe('digital-india');
+    expect(classify('Govt notifies amended IT rules for social media platforms under MeitY', '').category).toBe('digital-india');
+    expect(classify('Ather launches new electric scooter with faster charging stations network', '').category).toBe('ev-mobility');
+    expect(classify('Volvo EX90 electric SUV launched in India', '').category).toBe('ev-mobility');
+    expect(classify('ISRO readies Gaganyaan uncrewed mission on LVM3 rocket', '').category).toBe('space');
+    expect(classify('BGMI update brings new map; Krafton adds esports mode', '').category).toBe('apps-gaming');
+    expect(classify('Telemedicine app links ABHA health records for patients', '').category).toBe('health-tech');
+    expect(classify('TCS and Infosys slow campus hiring as AI skills demand grows', '').category).toBe('jobs-skills');
+    // A phone launch is still Phones & Gadgets.
+    expect(classify('OnePlus 15 launched in India with Snapdragon chip', '').category).toBe('phones-gadgets');
+  });
+
+  test('every category has feeds; the new ones have 2-4 dedicated feeds; ids are unique', () => {
+    const ids = STORY_FEEDS.map((f) => f.sourceId);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const c of CATEGORY_IDS) expect(STORY_FEEDS.some((f) => f.category === c)).toBe(true);
+    for (const c of ['telecom', 'digital-india', 'ev-mobility', 'space', 'apps-gaming', 'health-tech', 'jobs-skills']) {
+      const n = STORY_FEEDS.filter((f) => f.category === c).length;
+      expect(n).toBeGreaterThanOrEqual(2);
+      expect(n).toBeLessThanOrEqual(4);
+    }
+    for (const f of STORY_FEEDS) expect(f.feedUrl).toMatch(/^https:\/\//);
+  });
+
+  test('fallback cards exist for the new categories', () => {
+    const f = fallbackStory(
+      writerInput({
+        categoryHint: 'telecom',
+        sources: [{ sourceName: 'TelecomTalk', title: 'Jio launches new 5G broadband plans with more data', snippet: 'Reliance Jio has new AirFiber plans.', url: 'https://telecomtalk.info/jio-plans/1/', publishedAt: iso(1), official: false }],
+      })
+    );
+    expect(f.category).toBe('telecom');
+    expect(f.isTech).toBe(true);
+    expect(f.whatToDo.length).toBeGreaterThan(0);
+  });
+});
+
+describe('purely tech gate', () => {
+  test('drops politics, sports, celebrity and stock-market-only items', () => {
+    expect(isTechItem('BJP wins Bihar assembly polls as Congress concedes', '')).toBe(false);
+    expect(isTechItem('India beat Australia by 6 wickets in the second T20I', '')).toBe(false);
+    expect(isTechItem('Bollywood actor announces wedding date', '')).toBe(false);
+    expect(isTechItem('Sensex rises 500 points, Nifty above 25,000', '')).toBe(false);
+    expect(isTechItem('Infosys shares rise 3% after brokerage upgrade', '')).toBe(false);
+    expect(techVerdict('Ather Energy Shares Jump 8% After HSBC, Nomura Raise Price Targets').reason).toBe('stock-market-only');
+    expect(techVerdict('Max Healthcare posts ₹3,219 cr in Q2 FY27, profit climbs 10%').isTech).toBe(false);
+    expect(techVerdict('TBO Tek Q2 Profit Rises 12.5% YoY To ₹76 Cr').reason).toBe('financial results, no tech angle');
+  });
+
+  test('keeps tech stories even when they touch those subjects', () => {
+    expect(isTechItem('Election Commission launches app to track candidates', '')).toBe(true);
+    expect(isTechItem('JioHotstar streaming app crashes during IPL final', '')).toBe(true);
+    expect(isTechItem('Nvidia shares jump as new AI chip ships', '')).toBe(true);
+    expect(isTechItem("Apple posts record Q4 revenue on strong iPhone sales", '')).toBe(true);
+    expect(isTechItem('Deepfake video of actor sparks call for AI rules', '')).toBe(true);
+    expect(isTechItem('OnePlus 15 launched in India with Snapdragon chip', '')).toBe(true);
+    // Tech-native feed, neutral title: kept.
+    expect(isTechItem('Samsung confirms date for its next Unpacked event', '')).toBe(true);
+  });
+
+  test('mixed-beat sources need a positive tech signal', () => {
+    expect(isTechItem('Alaska Air to cut 200 jobs, warns of potential loss', '', { mixedSource: true })).toBe(false);
+    expect(isTechItem('Karnataka govt pauses circular on medicine price disclosure by hospitals', '', { mixedSource: true })).toBe(false);
+    expect(isTechItem('Amazon cuts more jobs in devices unit after product rollouts', '', { mixedSource: true })).toBe(true);
+    expect(isTechItem('Hospital chain deploys AI tool to read X-rays', '', { mixedSource: true })).toBe(true);
+  });
+
+  test('stored-story check is conservative: any tech headline or source title keeps the story', () => {
+    const politics = story({ id: 'st-pol', headline: 'BJP wins assembly polls in three states', whatHappened: 'The party won the election.', sources: [{ sourceId: 'et-tech', name: 'ET', url: 'https://economictimes.indiatimes.com/x.cms', title: 'BJP sweeps assembly polls', publishedAt: iso(2) }] });
+    const mixed = story({ id: 'st-mix', headline: 'Election results app crashes for millions', sources: [{ sourceId: 'et-tech', name: 'ET', url: 'https://economictimes.indiatimes.com/y.cms', title: 'Poll results', publishedAt: iso(2) }] });
+    expect(isNonTechStory(politics)).toBe(true);
+    expect(isNonTechStory(mixed)).toBe(false);
+    expect(isNonTechStory(story())).toBe(false);
+    expect(findNonTechStories([politics, mixed, story()]).map((s) => s.id)).toEqual(['st-pol']);
+  });
+
+  test('AI isTech=false is parsed; missing isTech keeps the story', () => {
+    const input = writerInput();
+    expect(validateStoryJson({ ...goodAiJson, isTech: false }, input, 'm').isTech).toBe(false);
+    expect(validateStoryJson({ ...goodAiJson, isTech: true }, input, 'm').isTech).toBe(true);
+    expect(validateStoryJson(goodAiJson, input, 'm').isTech).toBe(true);
+  });
+});
+
 describe('clusterer', () => {
   const item = (key: string, title: string, hoursAgo: number) => ({ key, title, publishedAtMs: NOW - hoursAgo * H });
 
@@ -460,6 +556,60 @@ ${items.map(([t, l, h, d]) => `<item><title><![CDATA[${t}]]></title><link>${l}</
     expect(cache.all().every((x) => !x.slug.startsWith('a-simple-ai-headline'))).toBe(true);
     resetGeminiBudget();
   });
+
+  test('tech gate drops non-tech feed items and counts them', () => {
+    const feed = feeds.find((f) => f.sourceId === 'et-tech')!;
+    const x = rss([
+      ['India beat Australia by 6 wickets in the second T20I', 'https://economictimes.indiatimes.com/tech/a/articleshow/11.cms', 1],
+      ['Sensex rises 500 points, Nifty above 25,000', 'https://economictimes.indiatimes.com/tech/b/articleshow/12.cms', 1],
+      ['Google rolls out Gemini features to Android phones in India', 'https://economictimes.indiatimes.com/tech/c/articleshow/13.cms', 1],
+    ]);
+    const r = itemsFromFeed(feed, x, NOW, 48);
+    expect(r.items.map((i) => i.title)).toEqual(['Google rolls out Gemini features to Android phones in India']);
+    expect(r.nonTech).toBe(2);
+  });
+
+  test('ingest removes stored non-tech stories from the cache and blocks their URLs', async () => {
+    const cache = new StoryCache();
+    const pol = story({ id: 'st-pol', slug: 'pol-st-pol', headline: 'BJP wins assembly polls in three states', whatHappened: 'The party won the election.', sources: [{ sourceId: 'et-tech', name: 'ET', url: 'https://economictimes.indiatimes.com/tech/pol/articleshow/9.cms', title: 'BJP sweeps assembly polls', publishedAt: iso(2) }] });
+    cache.upsert(pol);
+    cache.upsert(story());
+    const r = await runStoryPipeline({ dryRun: true, feeds: [], fetchText, imageFetchBudget: 0, now: NOW }, { cache, writer: new StoryWriter({ apiKey: '' }) });
+    expect(r.nonTechRemoved).toEqual(['st-pol']);
+    expect(cache.stories.has('st-pol')).toBe(false);
+    expect(cache.stories.has('st-1')).toBe(true);
+    expect(cache.blocked.has('https://economictimes.indiatimes.com/tech/pol/articleshow/9.cms')).toBe(true);
+    // keepNonTechStories leaves them alone
+    const c2 = new StoryCache();
+    c2.upsert(pol);
+    await runStoryPipeline({ dryRun: true, feeds: [], fetchText, imageFetchBudget: 0, now: NOW, keepNonTechStories: true }, { cache: c2, writer: new StoryWriter({ apiKey: '' }) });
+    expect(c2.stories.has('st-pol')).toBe(true);
+  });
+
+  test('a cluster the AI marks isTech=false is discarded and not retried next run', async () => {
+    const cache = new StoryCache();
+    const aiJson = { ...goodAiJson, isScam: false, scam: null, category: 'innovations', headline: 'Not a tech story at all', isTech: false };
+    const fetchFn = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(aiJson) }] } }] }), text: async () => '' });
+    const writer = new StoryWriter({ apiKey: 'k', fetchFn: fetchFn as any });
+    const r = await runStoryPipeline({ dryRun: true, feeds, fetchText, imageFetchBudget: 0, now: NOW }, { cache, writer });
+    expect(r.storiesCreated).toBe(0);
+    expect(r.nonTechByAi).toBe(3);
+    expect(cache.all()).toHaveLength(0);
+    const calls = fetchFn.mock.calls.length;
+    const again = await runStoryPipeline({ dryRun: true, feeds, fetchText, imageFetchBudget: 0, now: NOW + H }, { cache, writer });
+    expect(again.itemsNew).toBe(0);
+    expect(fetchFn.mock.calls.length).toBe(calls);
+    resetGeminiBudget();
+  });
+
+  test('blocked URLs survive a cache save/load', () => {
+    const file = path.join(os.tmpdir(), `td-cache-${process.pid}.json`);
+    const c = new StoryCache();
+    c.block('https://example.com/a');
+    c.save(file);
+    expect(StoryCache.load(file).blocked.has('https://example.com/a')).toBe(true);
+    fs.unlinkSync(file);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -542,7 +692,7 @@ describe('renderer', () => {
     const sm = renderSitemap(items, ctx);
     expect(XMLValidator.validate(sm)).toBe(true);
     const parsed = new XMLParser().parse(sm);
-    expect(parsed.urlset.url.length).toBe(1 + 8 + 2);
+    expect(parsed.urlset.url.length).toBe(1 + 15 + 2);
     expect(sm).toContain('<loc>https://techdaily-prod.web.app/story/evil-story-abc123/</loc>');
     const rss = renderRss(items, ctx);
     expect(XMLValidator.validate(rss)).toBe(true);
@@ -569,6 +719,24 @@ describe('renderer', () => {
     renderSite({ outDir: dir, stories: [story()], now: NOW });
     expect(fs.existsSync(path.join(dir, 'story/evil-story-abc123/index.html'))).toBe(false);
     expect(() => renderSite({ outDir: path.join(dir, 'missing'), stories: [] })).toThrow(/flutter build web/);
+  });
+
+  test('renders a page for every new category and never publishes non-tech stories', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-render-new-'));
+    fs.writeFileSync(path.join(dir, 'index.html'), '<html><head><title>x</title></head><body></body></html>');
+    const tel = story({ id: 'st-tel', slug: 'jio-5g-st-tel', category: 'telecom', headline: 'Jio adds more 5G data to prepaid plans' });
+    const pol = story({ id: 'st-pol', slug: 'pol-st-pol', headline: 'BJP wins assembly polls in three states', whatHappened: 'The party won the election.', sources: [{ sourceId: 'et-tech', name: 'ET', url: 'https://economictimes.indiatimes.com/tech/pol.cms', title: 'BJP sweeps assembly polls', publishedAt: iso(2) }] });
+    const res = renderSite({ outDir: dir, stories: [tel, pol, story()], now: NOW });
+    expect(res.categoryPages).toBe(15);
+    expect(res.storyPages).toBe(2);
+    for (const c of ['telecom', 'digital-india', 'ev-mobility', 'space', 'apps-gaming', 'health-tech', 'jobs-skills']) {
+      expect(fs.existsSync(path.join(dir, 'c', c, 'index.html'))).toBe(true);
+    }
+    expect(fs.readFileSync(path.join(dir, 'c/telecom/index.html'), 'utf8')).toContain('Telecom &amp; Internet');
+    expect(fs.existsSync(path.join(dir, 'story/pol-st-pol/index.html'))).toBe(false);
+    const sm = fs.readFileSync(path.join(dir, 'sitemap.xml'), 'utf8');
+    expect(sm).toContain('/c/jobs-skills/');
+    expect(sm).not.toContain('pol-st-pol');
   });
 });
 

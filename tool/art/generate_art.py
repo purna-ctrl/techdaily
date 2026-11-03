@@ -6,7 +6,8 @@
 
 Each artwork is a 1200x675 gradient mesh (soft radial colour blobs on near-black), a faint dot grid
 and a category motif (radar for scams, neural net for AI, phones, a chip, rising bars, an atom,
-coins and a rupee, a padlock, a sunburst). Run from the repo root:  python3 tool/art/generate_art.py
+coins and a rupee, a padlock, a tower, a fingerprint, a bolt, a rocket, a gamepad, a heartbeat,
+a briefcase, a sunburst). Run from the repo root:  python3 tool/art/generate_art.py
 """
 import math
 import os
@@ -25,6 +26,13 @@ COLORS = {
     "innovations": ("#06B6D4", "#3B82F6", "#22C55E", "#67E8F9"),
     "money-fintech": ("#EAB308", "#F97316", "#22C55E", "#FDE047"),
     "privacy": ("#14B8A6", "#3B82F6", "#0EA5E9", "#5EEAD4"),
+    "telecom": ("#E879F9", "#8B5CF6", "#EC4899", "#F0ABFC"),
+    "digital-india": ("#10B981", "#FF9933", "#3B82F6", "#6EE7B7"),
+    "ev-mobility": ("#A3E635", "#22C55E", "#06B6D4", "#D9F99D"),
+    "space": ("#38BDF8", "#6366F1", "#C084FC", "#7DD3FC"),
+    "apps-gaming": ("#F472B6", "#8B5CF6", "#F97316", "#F9A8D4"),
+    "health-tech": ("#FB7185", "#F43F5E", "#14B8A6", "#FDA4AF"),
+    "jobs-skills": ("#818CF8", "#38BDF8", "#EAB308", "#A5B4FC"),
     "top-stories": ("#FF5A1F", "#FF3B4E", "#EAB308", "#FF8255"),
 }
 
@@ -38,6 +46,13 @@ BLOBS = {
     "innovations": [(820, 320, 520, 0, 0.55), (200, 140, 380, 1, 0.4), (1080, 640, 340, 2, 0.4)],
     "money-fintech": [(860, 300, 500, 0, 0.5), (220, 600, 420, 1, 0.4), (1120, 640, 320, 2, 0.35)],
     "privacy": [(840, 320, 520, 0, 0.5), (220, 120, 360, 1, 0.4), (1080, 660, 340, 2, 0.4)],
+    "telecom": [(860, 320, 520, 0, 0.5), (200, 600, 400, 1, 0.45), (1120, 60, 300, 2, 0.35)],
+    "digital-india": [(840, 300, 520, 0, 0.5), (200, 120, 360, 1, 0.35), (1100, 650, 340, 2, 0.4)],
+    "ev-mobility": [(860, 340, 500, 0, 0.45), (220, 600, 420, 1, 0.4), (1120, 80, 300, 2, 0.35)],
+    "space": [(880, 280, 520, 0, 0.45), (220, 580, 440, 1, 0.5), (1100, 660, 320, 2, 0.4)],
+    "apps-gaming": [(840, 320, 520, 0, 0.5), (220, 120, 380, 1, 0.45), (1100, 650, 320, 2, 0.35)],
+    "health-tech": [(860, 300, 520, 0, 0.5), (200, 600, 400, 1, 0.4), (1120, 640, 320, 2, 0.4)],
+    "jobs-skills": [(840, 320, 520, 0, 0.55), (220, 600, 400, 1, 0.4), (1110, 70, 300, 2, 0.35)],
     "top-stories": [(860, 300, 540, 0, 0.6), (220, 600, 420, 1, 0.45), (1120, 60, 300, 2, 0.35)],
 }
 
@@ -140,6 +155,79 @@ def motif(cid):
         P.append(("rrect", 110, 290, 380, 96, 48, 0, "t", 0.55, 5))
         for i in range(6):
             P.append(("circle", 170 + i * 52, 338, 13, "w", 0.85 - i * 0.08, 0))
+    elif cid == "telecom":  # tower with signal arcs + network dots
+        cx, cy = 860, 300
+        P.append(("poly", [(cx - 90, 610), (cx, cy + 20), (cx + 90, 610)], False, "t", 0.75, 8))
+        P.append(("line", cx - 55, 470, cx + 55, 470, "t", 0.6, 6))
+        P.append(("line", cx - 30, 380, cx + 30, 380, "t", 0.6, 6))
+        P.append(("circle", cx, cy, 22, "w", 0.95, 0))
+        for i, r in enumerate((70, 130, 190)):
+            P.append(("arc", cx, cy, r, -60, 120, "t", 0.75 - i * 0.15, 8))
+            P.append(("arc", cx, cy, r, 120, 120, "t", 0.75 - i * 0.15, 8))
+        pts = [(180, 180), (300, 260), (220, 400), (380, 470)]
+        P.append(("poly", pts, False, "t", 0.4, 4))
+        for (x, y) in pts:
+            P.append(("circle", x, y, 12, "c", 0.9, 0))
+    elif cid == "digital-india":  # fingerprint arcs + ID card
+        cx, cy = 860, 340
+        for i, r in enumerate((40, 80, 120, 160, 200)):
+            P.append(("arc", cx, cy, r, 200 - i * 4, 150 + i * 6, "t", 0.8 - i * 0.1, 9))
+        P.append(("line", cx, cy, cx, cy + 120, "t", 0.7, 9))
+        P.append(("rrect", 130, 230, 330, 210, 24, -6, "t", 0.55, 5))
+        P.append(("circle", 215, 320, 34, "c", 0.85, 0))
+        for i in range(3):
+            P.append(("line", 285, 290 + i * 34, 410 - i * 30, 290 + i * 34 - 8, "w", 0.7, 8))
+    elif cid == "ev-mobility":  # lightning bolt + road + plug
+        cx, cy = 870, 330
+        P.append(("poly", [(cx + 30, cy - 230), (cx - 110, cy + 30), (cx - 10, cy + 30), (cx - 40, cy + 230), (cx + 110, cy - 40), (cx + 10, cy - 40)], True, "c", 0.85, 0))
+        P.append(("circle", cx, cy, 250, "t", 0.4, 5))
+        P.append(("poly", [(120, 600), (300, 380), (480, 600)], False, "t", 0.5, 6))
+        for i in range(3):
+            y = 560 - i * 60
+            P.append(("line", 300, y, 300, y - 30, "w", 0.6, 6))
+        P.append(("rrect", 240, 160, 120, 90, 18, 0, "t", 0.6, 5))
+        P.append(("line", 270, 160, 270, 120, "t", 0.6, 8))
+        P.append(("line", 330, 160, 330, 120, "t", 0.6, 8))
+    elif cid == "space":  # rocket + orbit + stars
+        cx, cy = 860, 330
+        P.append(("ellipse", cx, cy, 300, 100, -20, "t", 0.45, 4))
+        P.append(("rrect", cx - 45, cy - 190, 90, 300, 45, 0, "t", 0.85, 6))
+        P.append(("circle", cx, cy - 90, 22, "w", 0.9, 0))
+        P.append(("poly", [(cx - 45, cy + 20), (cx - 110, cy + 130), (cx - 45, cy + 100)], True, "c", 0.85, 0))
+        P.append(("poly", [(cx + 45, cy + 20), (cx + 110, cy + 130), (cx + 45, cy + 100)], True, "c", 0.85, 0))
+        P.append(("poly", [(cx - 25, cy + 125), (cx, cy + 210), (cx + 25, cy + 125)], True, "w", 0.7, 0))
+        P.append(("circle", cx + 280, cy - 100, 14, "w", 0.9, 0))
+        for (x, y, r) in ((180, 140, 5), (300, 220, 3), (240, 400, 4), (420, 120, 3), (380, 520, 5), (130, 560, 3)):
+            P.append(("circle", x, y, r, "w", 0.8, 0))
+        P.append(("circle", 300, 420, 70, "t", 0.5, 4))
+    elif cid == "apps-gaming":  # gamepad + app grid
+        cx, cy = 860, 360
+        P.append(("rrect", cx - 230, cy - 110, 460, 220, 110, 0, "t", 0.8, 7))
+        P.append(("line", cx - 150, cy, cx - 70, cy, "w", 0.9, 14))
+        P.append(("line", cx - 110, cy - 40, cx - 110, cy + 40, "w", 0.9, 14))
+        P.append(("circle", cx + 100, cy - 25, 18, "c", 0.95, 0))
+        P.append(("circle", cx + 150, cy + 20, 18, "c", 0.95, 0))
+        for r_ in range(3):
+            for c_ in range(3):
+                P.append(("rrect", 140 + c_ * 100, 150 + r_ * 100, 70, 70, 18, 0, "t" if (r_ + c_) % 2 else "c", 0.35 + 0.1 * r_, 0))
+    elif cid == "health-tech":  # heart + pulse line + watch
+        cx, cy = 870, 330
+        P.append(("poly", [(cx, cy + 190), (cx - 200, cy - 10), (cx - 200, cy - 110), (cx - 140, cy - 170), (cx - 60, cy - 170), (cx, cy - 100), (cx + 60, cy - 170), (cx + 140, cy - 170), (cx + 200, cy - 110), (cx + 200, cy - 10)], True, "c", 0.4, 0))
+        P.append(("poly", [(560, cy), (700, cy), (760, cy - 110), (840, cy + 120), (900, cy - 40), (940, cy), (1160, cy)], False, "w", 0.9, 9))
+        P.append(("rrect", 190, 220, 200, 240, 50, 0, "t", 0.7, 6))
+        P.append(("line", 240, 150, 340, 150, "t", 0.5, 10))
+        P.append(("line", 240, 530, 340, 530, "t", 0.5, 10))
+        P.append(("poly", [(220, 340), (260, 340), (280, 300), (305, 380), (325, 340), (360, 340)], False, "t", 0.85, 6))
+    elif cid == "jobs-skills":  # briefcase + rising steps + cap
+        cx, cy = 860, 350
+        P.append(("rrect", cx - 200, cy - 110, 400, 270, 30, 0, "t", 0.8, 7))
+        P.append(("rrect", cx - 70, cy - 170, 140, 70, 18, 0, "t", 0.7, 7))
+        P.append(("line", cx - 200, cy + 10, cx + 200, cy + 10, "t", 0.6, 6))
+        P.append(("rrect", cx - 25, cy - 10, 50, 44, 8, 0, "c", 0.95, 0))
+        for i in range(4):
+            P.append(("rrect", 140 + i * 80, 560 - (i + 1) * 70, 70, (i + 1) * 70, 10, 0, "t" if i < 3 else "c", 0.3 + i * 0.15, 0))
+        P.append(("poly", [(300, 140), (420, 190), (300, 240), (180, 190)], True, "w", 0.85, 0))
+        P.append(("line", 400, 200, 400, 270, "w", 0.7, 5))
     else:  # top-stories: sunburst + stacked cards
         cx, cy = 860, 330
         for i in range(16):

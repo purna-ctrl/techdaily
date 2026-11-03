@@ -2,6 +2,9 @@
  * Feeds read by the v2 stories pipeline. Every URL here returned valid, parseable RSS/Atom with
  * recent items when checked with curl + FeedParser on 2026-11-01 (see SETUP-GITHUB.md for the list
  * that did NOT work: Moneycontrol, PIB, CERT-In, NPCI, SEBI (no dates), Digit, 91mobiles, BGR).
+ * Feeds for the seven newer categories were checked the same way on 2026-11-03. Not working then:
+ * ISRO (404), Gadgets 360 section feeds (403/404), Autocar India (410), ET Auto EV section (empty),
+ * MobiHealthNews / Fierce Healthcare / Healthcare IT News (403), NASASpaceflight (403).
  *
  * `category` is only the feed's beat (a tie-breaker); each story's category is picked per story.
  */
@@ -17,6 +20,11 @@ export interface StoryFeed extends TrustedSourceConfig {
   official?: boolean;
   /** When set, only items whose title (or description) matches are used. */
   includePattern?: RegExp;
+  /**
+   * Mixed beat (government, health, HR, banking, general science): items must show a positive tech
+   * signal to pass the tech gate (tech-filter.ts). Tech-native feeds only drop clearly non-tech items.
+   */
+  mixed?: boolean;
 }
 
 const f = (
@@ -45,16 +53,19 @@ const f = (
 const RBI_PATTERN =
   /\b(fraud|frauds|caution|cautions|cautioned|digital|payment|payments|upi|card|cards|cyber|fintech|kyc|loan app|unauthori[sz]ed|fake|scam|customer protection|ombudsman|e-rupee|cbdc|mule|alert list|forex|deposit insurance|data)\b/i;
 
+const HEALTH_TECH_PATTERN =
+  /\b(digital|tech|technology|ai|artificial intelligence|app|apps|telemedicine|telehealth|abha|abdm|esanjeevani|wearable|wearables|device|devices|medtech|healthtech|software|platform|robot|robotic|data|cyber|online|startup|startups)\b/i;
+
 export const STORY_FEEDS: StoryFeed[] = [
   // ---- India ----
   f('gadgets360', 'Gadgets 360', 'gadgets360.com', 'https://feeds.feedburner.com/gadgets360-latest', 'phones-gadgets', 'india', { maxItemsPerRun: 15 }),
   f('medianama', 'MediaNama', 'medianama.com', 'https://www.medianama.com/feed/', 'privacy', 'india'),
   f('et-tech', 'ET Tech', 'economictimes.indiatimes.com', 'https://economictimes.indiatimes.com/tech/rssfeeds/13357270.cms', 'startups-india', 'india', { maxItemsPerRun: 15 }),
-  f('et-bfsi', 'ET BFSI', 'bfsi.economictimes.indiatimes.com', 'https://bfsi.economictimes.indiatimes.com/rss/topstories', 'money-fintech', 'india'),
-  f('et-telecom', 'ET Telecom', 'telecom.economictimes.indiatimes.com', 'https://telecom.economictimes.indiatimes.com/rss/topstories', 'phones-gadgets', 'india', { maxItemsPerRun: 8 }),
+  f('et-bfsi', 'ET BFSI', 'bfsi.economictimes.indiatimes.com', 'https://bfsi.economictimes.indiatimes.com/rss/topstories', 'money-fintech', 'india', { mixed: true }),
+  f('et-telecom', 'ET Telecom', 'telecom.economictimes.indiatimes.com', 'https://telecom.economictimes.indiatimes.com/rss/topstories', 'telecom', 'india', { maxItemsPerRun: 8 }),
   f('the-hindu-tech', 'The Hindu', 'thehindu.com', 'https://www.thehindu.com/sci-tech/technology/feeder/default.rss', 'innovations', 'india'),
   f('the-hindu-gadgets', 'The Hindu', 'thehindu.com', 'https://www.thehindu.com/sci-tech/technology/gadgets/feeder/default.rss', 'phones-gadgets', 'india', { maxItemsPerRun: 8 }),
-  f('the-hindu-science', 'The Hindu', 'thehindu.com', 'https://www.thehindu.com/sci-tech/science/feeder/default.rss', 'innovations', 'india', { maxItemsPerRun: 8 }),
+  f('the-hindu-science', 'The Hindu', 'thehindu.com', 'https://www.thehindu.com/sci-tech/science/feeder/default.rss', 'innovations', 'india', { maxItemsPerRun: 8, mixed: true }),
   f('livemint-tech', 'Mint', 'livemint.com', 'https://www.livemint.com/rss/technology', 'startups-india', 'india'),
   f('indian-express-tech', 'The Indian Express', 'indianexpress.com', 'https://indianexpress.com/section/technology/feed/', 'phones-gadgets', 'india'),
   f('inc42', 'Inc42', 'inc42.com', 'https://inc42.com/feed/', 'startups-india', 'india'),
@@ -98,9 +109,43 @@ export const STORY_FEEDS: StoryFeed[] = [
     additionalDomains: ['blogs.nvidia.com'],
   }),
   f('meta-newsroom', 'Meta', 'about.fb.com', 'https://about.fb.com/news/feed/', 'ai', 'official', { official: true, maxItemsPerRun: 5 }),
-  f('nasa', 'NASA', 'nasa.gov', 'https://www.nasa.gov/feed/', 'innovations', 'official', { official: true, maxItemsPerRun: 4 }),
+  f('nasa', 'NASA', 'nasa.gov', 'https://www.nasa.gov/feed/', 'space', 'official', { official: true, maxItemsPerRun: 4 }),
   f('github-blog', 'GitHub', 'github.blog', 'https://github.blog/feed/', 'ai', 'official', { official: true, maxItemsPerRun: 3 }),
   f('aws-blog', 'AWS', 'aws.amazon.com', 'https://aws.amazon.com/blogs/aws/feed/', 'innovations', 'official', { official: true, maxItemsPerRun: 2 }),
+  // ---- Telecom & Internet (+ ET Telecom above) ----
+  f('telecomtalk', 'TelecomTalk', 'telecomtalk.info', 'https://telecomtalk.info/feed/', 'telecom', 'india', { maxItemsPerRun: 10 }),
+  f('light-reading', 'Light Reading', 'lightreading.com', 'https://www.lightreading.com/rss.xml', 'telecom', 'global', { maxItemsPerRun: 5 }),
+  // ---- Digital India ----
+  f('et-gov-digital-india', 'ETGovernment', 'government.economictimes.indiatimes.com', 'https://government.economictimes.indiatimes.com/rss/digital-india', 'digital-india', 'india', { mixed: true, maxItemsPerRun: 8 }),
+  f('et-gov-technology', 'ETGovernment', 'government.economictimes.indiatimes.com', 'https://government.economictimes.indiatimes.com/rss/technology', 'digital-india', 'india', { mixed: true, maxItemsPerRun: 8 }),
+  // ---- EVs & Mobility ----
+  f('evreporter', 'EVreporter', 'evreporter.com', 'https://evreporter.com/feed/', 'ev-mobility', 'india', { maxItemsPerRun: 8 }),
+  f('inc42-ev', 'Inc42', 'inc42.com', 'https://inc42.com/industry/electric-vehicles/feed/', 'ev-mobility', 'india', { maxItemsPerRun: 6 }),
+  f('techcrunch-transportation', 'TechCrunch', 'techcrunch.com', 'https://techcrunch.com/category/transportation/feed/', 'ev-mobility', 'global', { maxItemsPerRun: 5 }),
+  f('electrek', 'Electrek', 'electrek.co', 'https://electrek.co/feed/', 'ev-mobility', 'global', { maxItemsPerRun: 5 }),
+  // ---- Space Tech (+ NASA above) ----
+  f('space-com', 'Space.com', 'space.com', 'https://www.space.com/feeds/all', 'space', 'global', { maxItemsPerRun: 6 }),
+  f('spacenews', 'SpaceNews', 'spacenews.com', 'https://spacenews.com/feed/', 'space', 'global', { maxItemsPerRun: 6 }),
+  f('techcrunch-space', 'TechCrunch', 'techcrunch.com', 'https://techcrunch.com/category/space/feed/', 'space', 'global', { maxItemsPerRun: 4 }),
+  // ---- Apps & Gaming ----
+  f('techcrunch-apps', 'TechCrunch', 'techcrunch.com', 'https://techcrunch.com/category/apps/feed/', 'apps-gaming', 'global', { maxItemsPerRun: 6 }),
+  f('techcrunch-gaming', 'TechCrunch', 'techcrunch.com', 'https://techcrunch.com/category/gaming/feed/', 'apps-gaming', 'global', { maxItemsPerRun: 4 }),
+  f('the-verge-games', 'The Verge', 'theverge.com', 'https://www.theverge.com/rss/games/index.xml', 'apps-gaming', 'global', { maxItemsPerRun: 5 }),
+  f('inc42-gaming', 'Inc42', 'inc42.com', 'https://inc42.com/industry/gaming/feed/', 'apps-gaming', 'india', { maxItemsPerRun: 4 }),
+  // ---- Health Tech ----
+  f('inc42-healthtech', 'Inc42', 'inc42.com', 'https://inc42.com/industry/healthtech/feed/', 'health-tech', 'india', { maxItemsPerRun: 5 }),
+  f('et-health-it', 'ETHealthworld', 'health.economictimes.indiatimes.com', 'https://health.economictimes.indiatimes.com/rss/health-it', 'health-tech', 'india', { mixed: true, maxItemsPerRun: 5 }),
+  f('et-health', 'ETHealthworld', 'health.economictimes.indiatimes.com', 'https://health.economictimes.indiatimes.com/rss/topstories', 'health-tech', 'india', {
+    mixed: true,
+    maxItemsPerRun: 5,
+    includePattern: HEALTH_TECH_PATTERN,
+  }),
+  f('medcity-news', 'MedCity News', 'medcitynews.com', 'https://medcitynews.com/feed/', 'health-tech', 'global', { mixed: true, maxItemsPerRun: 5 }),
+  // ---- Tech Jobs & Skills ----
+  f('et-cio', 'ETCIO', 'cio.economictimes.indiatimes.com', 'https://cio.economictimes.indiatimes.com/rss/topstories', 'jobs-skills', 'india', { maxItemsPerRun: 5 }),
+  f('et-hr-tech', 'ETHRWorld', 'hr.economictimes.indiatimes.com', 'https://hr.economictimes.indiatimes.com/rss/hrtech', 'jobs-skills', 'india', { mixed: true, maxItemsPerRun: 6 }),
+  f('analytics-india', 'Analytics India Magazine', 'analyticsindiamag.com', 'https://analyticsindiamag.com/feed/', 'jobs-skills', 'india', { maxItemsPerRun: 6 }),
+  f('techcrunch-layoffs', 'TechCrunch', 'techcrunch.com', 'https://techcrunch.com/tag/layoffs/feed/', 'jobs-skills', 'global', { maxItemsPerRun: 4 }),
 ];
 
 /**

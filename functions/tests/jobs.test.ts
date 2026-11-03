@@ -1,4 +1,4 @@
-import { parseArgs, runDailyBrief, runIngest, runPurgeSeed, JobDeps } from '../src/jobs';
+import { parseArgs, runDailyBrief, runIngest, runPurgeSeed, runPurgeNonTech, JobDeps } from '../src/jobs';
 import { DAILY_BRIEF_TOPIC } from '../src/notifications/push-service';
 
 const brief = {
@@ -25,6 +25,36 @@ function pushMock() {
 }
 
 describe('jobs CLI (GitHub Actions runner)', () => {
+  test('purge-non-tech is a dry run unless --apply', () => {
+    expect(parseArgs(['purge-non-tech']).apply).toBe(false);
+    expect(parseArgs(['purge-non-tech', '--apply']).apply).toBe(true);
+    expect(parseArgs(['purge-non-tech', '--apply', '--dry-run']).apply).toBe(false);
+  });
+
+  test('runPurgeNonTech lists matches without deleting by default, deletes with --apply', async () => {
+    const docs = [
+      { id: 'a', data: () => ({ slug: 'a', headline: 'BJP wins assembly polls in three states', category: 'startups-india', publishedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), sources: [{ name: 'ET', url: 'https://economictimes.indiatimes.com/a.cms', title: 'BJP sweeps assembly polls', publishedAt: new Date().toISOString() }], whatHappened: 'The party won the election.' }) },
+      { id: 'b', data: () => ({ slug: 'b', headline: 'Jio adds more 5G data to prepaid plans', category: 'telecom', publishedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), sources: [{ name: 'ET', url: 'https://economictimes.indiatimes.com/b.cms', title: 'Jio 5G plans', publishedAt: new Date().toISOString() }], whatHappened: 'More data.' }) },
+    ];
+    const deletes: string[] = [];
+    const sets: string[] = [];
+    const db: any = {
+      collection: (name: string) => ({
+        get: async () => ({ docs, size: docs.length }),
+        doc: (id: string) => ({ path: `${name}/${id}` }),
+      }),
+      batch: () => ({ delete: (ref: any) => deletes.push(ref.path), set: (ref: any) => sets.push(ref.path), commit: async () => undefined }),
+    };
+    const dry = await runPurgeNonTech(parseArgs(['purge-non-tech']), { db });
+    expect(dry.dryRun).toBe(true);
+    expect(dry.matched.map((m) => m.id)).toEqual(['a']);
+    expect(deletes).toHaveLength(0);
+    const real = await runPurgeNonTech(parseArgs(['purge-non-tech', '--apply']), { db });
+    expect(real.deleted).toBe(1);
+    expect(deletes).toEqual(['stories/a', 'storySources/a']);
+    expect(sets.some((p) => p.startsWith('storyBriefs/'))).toBe(true);
+  });
+
   test('parseArgs reads command and flags', () => {
     expect(parseArgs(['ingest', '--dry-run', '--concurrency=5', '--source=verge'])).toMatchObject({
       command: 'ingest',

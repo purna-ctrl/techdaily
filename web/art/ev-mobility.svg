@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true">
+<defs>
+<radialGradient id="b0"><stop offset="0" stop-color="#A3E635" stop-opacity="0.45"/><stop offset="1" stop-color="#A3E635" stop-opacity="0"/></radialGradient>
+<radialGradient id="b1"><stop offset="0" stop-color="#22C55E" stop-opacity="0.4"/><stop offset="1" stop-color="#22C55E" stop-opacity="0"/></radialGradient>
+<radialGradient id="b2"><stop offset="0" stop-color="#06B6D4" stop-opacity="0.35"/><stop offset="1" stop-color="#06B6D4" stop-opacity="0"/></radialGradient>
+<pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.4" fill="#FFFFFF" fill-opacity=".07"/></pattern>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0B0B0F"/><stop offset="1" stop-color="#263216"/></linearGradient>
+</defs>
+<rect width="1200" height="675" fill="url(#bg)"/>
+<circle cx="860" cy="340" r="500" fill="url(#b0)"/>
+<circle cx="220" cy="600" r="420" fill="url(#b1)"/>
+<circle cx="1120" cy="80" r="300" fill="url(#b2)"/>
+<rect width="1200" height="675" fill="url(#dots)"/>
+<polygon points="900,100 760,360 860,360 830,560 980,290 880,290" fill="#A3E635" fill-opacity="0.85"/>
+<circle cx="870" cy="330" r="250" fill="none" stroke="#D9F99D" stroke-opacity="0.4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="120,600 300,380 480,600" fill="none" stroke="#D9F99D" stroke-opacity="0.5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="300" y1="560" x2="300" y2="530" fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="300" y1="500" x2="300" y2="470" fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="300" y1="440" x2="300" y2="410" fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="240" y="160" width="120" height="90" rx="18" fill="none" stroke="#D9F99D" stroke-opacity="0.6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="270" y1="160" x2="270" y2="120" fill="none" stroke="#D9F99D" stroke-opacity="0.6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="330" y1="160" x2="330" y2="120" fill="none" stroke="#D9F99D" stroke-opacity="0.6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

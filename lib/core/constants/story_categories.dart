@@ -23,6 +23,12 @@ class StoryCategory {
         'chips-hardware' => 'Chips',
         'startups-india' => 'Startups',
         'money-fintech' => 'Money',
+        'telecom' => 'Telecom',
+        'ev-mobility' => 'EVs',
+        'space' => 'Space',
+        'apps-gaming' => 'Apps',
+        'health-tech' => 'Health',
+        'jobs-skills' => 'Jobs',
         'top-stories' => 'Top',
         _ => label,
       };
@@ -40,6 +46,13 @@ const List<StoryCategory> kStoryCategories = [
   StoryCategory('innovations', 'Innovations', Icons.science_rounded, Color(0xFF06B6D4), Color(0xFF22D3EE)),
   StoryCategory('money-fintech', 'Money & Fintech', Icons.currency_rupee_rounded, Color(0xFFEAB308), Color(0xFFFACC15)),
   StoryCategory('privacy', 'Privacy', Icons.lock_rounded, Color(0xFF14B8A6), Color(0xFF2DD4BF)),
+  StoryCategory('telecom', 'Telecom & Internet', Icons.cell_tower_rounded, Color(0xFFE879F9), Color(0xFFF0ABFC)),
+  StoryCategory('digital-india', 'Digital India', Icons.fingerprint_rounded, Color(0xFF10B981), Color(0xFF6EE7B7)),
+  StoryCategory('ev-mobility', 'EVs & Mobility', Icons.electric_bolt_rounded, Color(0xFFA3E635), Color(0xFFD9F99D)),
+  StoryCategory('space', 'Space Tech', Icons.satellite_alt_rounded, Color(0xFF38BDF8), Color(0xFF7DD3FC)),
+  StoryCategory('apps-gaming', 'Apps & Gaming', Icons.sports_esports_rounded, Color(0xFFF472B6), Color(0xFFF9A8D4)),
+  StoryCategory('health-tech', 'Health Tech', Icons.monitor_heart_rounded, Color(0xFFFB7185), Color(0xFFFDA4AF)),
+  StoryCategory('jobs-skills', 'Tech Jobs & Skills', Icons.work_rounded, Color(0xFF818CF8), Color(0xFFA5B4FC)),
 ];
 
 StoryCategory storyCategoryById(String id) {

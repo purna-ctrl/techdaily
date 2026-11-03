@@ -8,6 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { CATEGORY_IDS } from '../categories';
+import { isNonTechStory } from '../tech-filter';
 import { pickTodayInFive, rankStories, TodayInFive } from '../ranking';
 import { Story } from '../types';
 import {
@@ -103,6 +104,8 @@ export function renderSite(opts: RenderOptions): RenderResult {
 
   const all = opts.stories
     .filter(validStory)
+    // Purely tech: never publish a stored story that is clearly not technology news.
+    .filter((s) => !isNonTechStory(s))
     .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
   const pages = all.slice(0, opts.maxStoryPages ?? 5000);
   const bySlug = new Map(pages.map((s) => [s.slug, s]));

@@ -39,6 +39,8 @@ export interface WrittenStory {
   aiModel: string;
   needsEnrichment: boolean;
   promptVersion: string;
+  /** False when the AI judged the reports not to be technology news: the story is discarded. */
+  isTech: boolean;
 }
 
 export class StoryValidationError extends Error {}
@@ -49,6 +51,7 @@ export class StoryValidationError extends Error {}
 
 export const STORY_SYSTEM_INSTRUCTION = `You write for TechDaily, a technology news app for everyday people in India.
 Readers are not tech experts. Explain the news so a 14-year-old understands it.
+TechDaily carries ONLY technology news (any field of tech). First decide "isTech".
 
 RULES
 1. Use only facts that are in the reports you are given. Never invent numbers, prices, dates, names, quotes or links.
@@ -59,12 +62,24 @@ RULES
 6. If the reports are thin, disagree, or describe a leak, rumour or "reportedly" claim, say it is not confirmed, set "unconfirmed": true and lower "confidence".
 
 FIELDS (respond with one JSON object only)
+- isTech: true when the story is about technology: gadgets, apps, AI, software, internet, telecom, chips, cyber security,
+  fintech and digital payments, digital government services and tech laws, EVs and mobility tech, space tech, gaming,
+  health tech, tech companies, tech jobs and skills, science and engineering breakthroughs.
+  false for general politics, elections, war, sports, films and celebrities, crime, weather, share prices / stock-market
+  moves or quarterly results with no tech angle, and business news with no technology in it (airlines, steel, FMCG, real estate).
+  When isTech is false, still fill the other fields briefly; the story will be discarded.
 - headline: at most 90 characters, plain words, says what happened.
 - category: exactly one of ${CATEGORY_IDS.map((c) => `"${c}"`).join(', ')}.
   scams-security = scams, fraud, hacking, data breaches, security bugs and updates; ai = AI tools and companies;
-  phones-gadgets = phones, laptops, wearables, TVs, apps on devices, telecom plans; chips-hardware = chips, processors, memory, data centres;
-  startups-india = startups, funding, Indian tech companies and policy; innovations = science, space, research, new inventions;
-  money-fintech = UPI, banks, payments, loans, crypto, insurance, tax; privacy = personal data, tracking, surveillance, data laws.
+  phones-gadgets = phones, laptops, wearables, TVs and other devices; chips-hardware = chips, processors, memory, data centres;
+  startups-india = startups, funding, Indian tech companies; innovations = research, robots, new inventions, science breakthroughs;
+  money-fintech = UPI, banks' digital services, payments, loans apps, crypto; privacy = personal data, tracking, surveillance;
+  telecom = 5G, broadband, Jio/Airtel/Vi/BSNL plans and prices, TRAI/DoT rules, satellite internet, network outages;
+  digital-india = Aadhaar, UPI/NPCI rules, DigiLocker, ONDC, IT rules and DPDP law, government tech services;
+  ev-mobility = electric vehicles, batteries, charging, self-driving, ride-hailing and mobility apps, FASTag;
+  space = ISRO, Gaganyaan, SpaceX, NASA, rockets, satellites; apps-gaming = app updates and bans, games, consoles, BGMI,
+  OTT and streaming apps (features, prices); health-tech = ABHA, telemedicine, health features in wearables, medical AI and devices;
+  jobs-skills = tech hiring and layoffs, IT services jobs, GCCs, AI skills and courses.
 - whatHappened: 1 or 2 short sentences (max 45 words).
 - affectsWho: 1 sentence naming who is affected (for example "Android phone users", "People who use UPI apps"), or "No one directly yet" with a short reason.
 - whatToDo: 1 to 3 concrete steps, each under 20 words, each starting with a verb. If there is nothing to do, give one step that says so and why.
@@ -120,8 +135,9 @@ export const STORY_RESPONSE_SCHEMA = {
     },
     confidence: { type: 'STRING', enum: ['high', 'medium', 'low'] },
     unconfirmed: { type: 'BOOLEAN' },
+    isTech: { type: 'BOOLEAN' },
   },
-  required: ['headline', 'category', 'whatHappened', 'affectsWho', 'whatToDo', 'whatItMeans', 'isScam', 'confidence', 'unconfirmed'],
+  required: ['isTech', 'headline', 'category', 'whatHappened', 'affectsWho', 'whatToDo', 'whatItMeans', 'isScam', 'confidence', 'unconfirmed'],
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -199,6 +215,8 @@ export function validateStoryJson(raw: unknown, input: WriterInput, model: strin
     aiModel: model,
     needsEnrichment: false,
     promptVersion: STORY_PROMPT_VERSION,
+    // Only an explicit false discards; a missing field keeps the story (the keyword gate already ran).
+    isTech: o.isTech !== false,
   };
 }
 
@@ -275,6 +293,59 @@ const TEMPLATES: Record<CategoryId, Template> = {
       "Turn off location, contacts or microphone access for apps that don't need it.",
     ],
     means: 'Your personal data has value; knowing who collects it helps you stay in control of it.',
+  },
+  telecom: {
+    affects: 'Mobile and broadband users, especially customers of the telecom companies in this story.',
+    todo: [
+      "Check your operator's app or website for changes to your plan or price.",
+      'Compare plans before your next recharge if prices change.',
+    ],
+    means: 'Changes in telecom affect how much you pay for data and how good your network is.',
+  },
+  'digital-india': {
+    affects: 'People who use government digital services like Aadhaar, UPI, DigiLocker or online portals.',
+    todo: [
+      'Check the official government website or app for the exact new rule.',
+      'Use only official apps and websites for Aadhaar and other government services.',
+    ],
+    means: "India's digital public services keep changing; knowing the rules helps you use them safely.",
+  },
+  'ev-mobility': {
+    affects: 'People who own or plan to buy an electric vehicle, and users of ride and mobility apps.',
+    todo: [
+      'If you plan to buy an EV, compare range, charging options and subsidies first.',
+      'Nothing urgent — open the original report for full details.',
+    ],
+    means: 'Electric and smarter vehicles are changing how India travels, and costs may shift as a result.',
+  },
+  space: {
+    affects: 'No one directly yet — this is about space missions and satellite technology.',
+    todo: ['Nothing to do — open the original report if you want the details.'],
+    means: 'Space technology powers everyday things like maps, weather forecasts and satellite internet.',
+  },
+  'apps-gaming': {
+    affects: 'People who use the apps, games or streaming services in this story.',
+    todo: [
+      'Update the app from the Play Store or App Store to get the change.',
+      'Check the app for any change to its price or subscription plan.',
+    ],
+    means: 'Apps and games you use every day may look, work or cost different after this change.',
+  },
+  'health-tech': {
+    affects: 'People who use health apps, wearables or online doctor services.',
+    todo: [
+      'Use health features as a guide, not a replacement for a doctor.',
+      'Share health data only with apps and services you trust.',
+    ],
+    means: 'Technology is making health care easier to reach, but your health data needs care.',
+  },
+  'jobs-skills': {
+    affects: 'People working in, or hoping to join, the tech industry.',
+    todo: [
+      'If you work in tech, keep your skills and resume up to date.',
+      'Learn in-demand skills like AI from trusted free or low-cost courses.',
+    ],
+    means: 'Tech hiring and skills keep shifting; staying updated helps you stay employable.',
   },
 };
 
@@ -362,6 +433,7 @@ export function fallbackStory(input: WriterInput): WrittenStory {
     aiModel: FALLBACK_MODEL,
     needsEnrichment: true,
     promptVersion: STORY_PROMPT_VERSION,
+    isTech: true,
   };
 }
 

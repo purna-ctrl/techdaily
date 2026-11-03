@@ -9,6 +9,7 @@ on:
         options:
           - migrate-articles
           - purge-seed
+          - purge-non-tech
         default: migrate-articles
       dry_run:
         description: 'Dry run (only count; no writes)'
@@ -51,7 +52,9 @@ jobs:
 
       # migrate-articles: v1 `articles` -> v2 `stories` (fallback cards; the hourly run re-enriches
       # recent ones with Gemini). `articles` is only read. Safe to re-run.
+      # purge-non-tech: lists stored stories that are not technology news; deletes them only when
+      # dry_run is unchecked (passes --apply).
       - name: Run ${{ inputs.task }}
         env:
           FIREBASE_PROJECT_ID: techdaily-prod
-        run: npx tsx src/jobs.ts ${{ inputs.task }} ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: npx tsx src/jobs.ts ${{ inputs.task }} ${{ inputs.dry_run && '--dry-run' || (inputs.task == 'purge-non-tech' && '--apply' || '') }}

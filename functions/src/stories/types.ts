@@ -89,5 +89,5 @@ export interface NewsItem {
   image?: ImageCandidate;
 }
 
-export const STORY_PROMPT_VERSION = 'stories-v1';
+export const STORY_PROMPT_VERSION = 'stories-v2';
 export const FALLBACK_MODEL = 'techdaily-fallback-v2';

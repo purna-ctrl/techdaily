@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:techdaily/core/constants/story_categories.dart';
 import 'package:techdaily/core/stories_scope.dart';
 import 'package:techdaily/models/story.dart';
 import 'package:techdaily/services/v2/newsletter_service.dart';
@@ -106,12 +107,12 @@ void main() {
     final again = TopicPrefs();
     await again.load();
     expect(again.value, {'privacy'});
-    for (final id in ['scams-security', 'ai', 'phones-gadgets', 'chips-hardware', 'startups-india', 'innovations', 'money-fintech']) {
-      await again.setVisible(id, false);
+    for (final c in kStoryCategories) {
+      await again.setVisible(c.id, false);
     }
     expect(again.visibleCategories, hasLength(1));
     await again.showAll();
-    expect(again.visibleCategories, hasLength(8));
+    expect(again.visibleCategories, hasLength(15));
   });
 
   test('Guest saves merge into the account on sign-in and clear the device copy', () async {

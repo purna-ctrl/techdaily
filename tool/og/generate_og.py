@@ -38,6 +38,13 @@ CATS = [
     ("innovations", "Innovations"),
     ("money-fintech", "Money & Fintech"),
     ("privacy", "Privacy"),
+    ("telecom", "Telecom & Internet"),
+    ("digital-india", "Digital India"),
+    ("ev-mobility", "EVs & Mobility"),
+    ("space", "Space Tech"),
+    ("apps-gaming", "Apps & Gaming"),
+    ("health-tech", "Health Tech"),
+    ("jobs-skills", "Tech Jobs & Skills"),
 ]
 
 
@@ -95,6 +102,48 @@ def glyph(d: ImageDraw.ImageDraw, cid: str, cx: int, cy: int, r: int):
         d.ellipse([cx - r * 0.3, cy - r * 0.3, cx + r * 0.3, cy + r * 0.3], fill=ACCENT)
         d.line([(cx - r * 0.85, cy + r * 0.85), (cx + r * 0.85, cy - r * 0.85)], fill=INK, width=w + 16)
         d.line([(cx - r * 0.85, cy + r * 0.85), (cx + r * 0.85, cy - r * 0.85)], fill=ACCENT, width=w)
+    elif cid == "telecom":  # tower + signal arcs
+        d.line([(cx - r * 0.45, cy + r), (cx, cy - r * 0.2), (cx + r * 0.45, cy + r)], fill=ACCENT, width=w, joint="curve")
+        d.ellipse([cx - 16, cy - r * 0.2 - 16, cx + 16, cy - r * 0.2 + 16], fill=ACCENT)
+        for k in (0.45, 0.8):
+            R = r * k
+            box = [cx - R, cy - r * 0.2 - R, cx + R, cy - r * 0.2 + R]
+            d.arc(box, 300, 360, fill=ACCENT, width=w)
+            d.arc(box, 0, 30, fill=ACCENT, width=w)
+            d.arc(box, 150, 240, fill=ACCENT, width=w)
+    elif cid == "digital-india":  # fingerprint arcs
+        for i, k in enumerate((0.25, 0.5, 0.75, 1.0)):
+            R = r * k
+            d.arc([cx - R, cy - R, cx + R, cy + R], 190 - i * 6, 350 + i * 6, fill=ACCENT, width=12)
+        d.line([(cx, cy), (cx, cy + r * 0.8)], fill=ACCENT, width=12)
+        d.arc([cx - r * 0.5, cy - r * 0.5, cx + r * 0.5, cy + r * 0.5], 0, 80, fill=ACCENT, width=12)
+    elif cid == "ev-mobility":  # lightning bolt
+        d.polygon([(cx + r * 0.15, cy - r), (cx - r * 0.55, cy + r * 0.12), (cx - r * 0.05, cy + r * 0.12), (cx - r * 0.2, cy + r), (cx + r * 0.55, cy - r * 0.18), (cx + r * 0.05, cy - r * 0.18)], fill=ACCENT)
+    elif cid == "space":  # rocket
+        d.rounded_rectangle([cx - r * 0.3, cy - r, cx + r * 0.3, cy + r * 0.55], radius=int(r * 0.3), outline=ACCENT, width=w)
+        d.ellipse([cx - 18, cy - r * 0.35 - 18, cx + 18, cy - r * 0.35 + 18], fill=ACCENT)
+        d.polygon([(cx - r * 0.3, cy + r * 0.1), (cx - r * 0.7, cy + r * 0.75), (cx - r * 0.3, cy + r * 0.55)], fill=ACCENT)
+        d.polygon([(cx + r * 0.3, cy + r * 0.1), (cx + r * 0.7, cy + r * 0.75), (cx + r * 0.3, cy + r * 0.55)], fill=ACCENT)
+        d.line([(cx, cy + r * 0.65), (cx, cy + r)], fill=ACCENT, width=w)
+    elif cid == "apps-gaming":  # gamepad
+        d.rounded_rectangle([cx - r, cy - r * 0.5, cx + r, cy + r * 0.5], radius=int(r * 0.5), outline=ACCENT, width=w)
+        d.line([(cx - r * 0.65, cy), (cx - r * 0.25, cy)], fill=ACCENT, width=w)
+        d.line([(cx - r * 0.45, cy - r * 0.2), (cx - r * 0.45, cy + r * 0.2)], fill=ACCENT, width=w)
+        for (x, y) in ((cx + r * 0.35, cy - r * 0.1), (cx + r * 0.6, cy + r * 0.12)):
+            d.ellipse([x - 16, y - 16, x + 16, y + 16], fill=ACCENT)
+    elif cid == "health-tech":  # heart + pulse
+        R = r * 0.5
+        d.ellipse([cx - 2 * R, cy - R * 1.4, cx, cy + R * 0.6], outline=ACCENT, width=w)
+        d.ellipse([cx, cy - R * 1.4, cx + 2 * R, cy + R * 0.6], outline=ACCENT, width=w)
+        d.polygon([(cx - 1.85 * R, cy + 0.05 * R), (cx, cy + 2 * R), (cx + 1.85 * R, cy + 0.05 * R)], fill=SURFACE)
+        d.line([(cx - 1.85 * R, cy + 0.05 * R), (cx, cy + 2 * R), (cx + 1.85 * R, cy + 0.05 * R)], fill=ACCENT, width=w, joint="curve")
+        d.line([(cx - r, cy), (cx - r * 0.35, cy), (cx - r * 0.15, cy - r * 0.4), (cx + r * 0.1, cy + r * 0.35), (cx + r * 0.3, cy), (cx + r, cy)], fill=INK, width=w + 12, joint="curve")
+        d.line([(cx - r, cy), (cx - r * 0.35, cy), (cx - r * 0.15, cy - r * 0.4), (cx + r * 0.1, cy + r * 0.35), (cx + r * 0.3, cy), (cx + r, cy)], fill=ACCENT, width=w, joint="curve")
+    elif cid == "jobs-skills":  # briefcase
+        d.rounded_rectangle([cx - r, cy - r * 0.45, cx + r, cy + r * 0.8], radius=24, outline=ACCENT, width=w)
+        d.rounded_rectangle([cx - r * 0.35, cy - r * 0.8, cx + r * 0.35, cy - r * 0.45], radius=14, outline=ACCENT, width=w)
+        d.line([(cx - r, cy + r * 0.1), (cx + r, cy + r * 0.1)], fill=ACCENT, width=w)
+        d.rectangle([cx - 20, cy - 4, cx + 20, cy + 36], fill=ACCENT)
     else:  # top stories: stacked cards with a "5"
         for i in range(3):
             o = i * 26
