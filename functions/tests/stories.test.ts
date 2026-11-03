@@ -93,6 +93,16 @@ const goodAiJson = {
   unconfirmed: false,
 };
 
+/** Gemini mock that answers every batch with `obj` for each story id in the prompt. */
+function geminiEcho(obj: Record<string, unknown> | ((id: string, i: number) => Record<string, unknown>)) {
+  return jest.fn().mockImplementation(async (_url: string, init: any) => {
+    const prompt: string = JSON.parse(init.body).contents[0].parts[0].text;
+    const ids = [...prompt.matchAll(/=== STORY id=(\S+)/g)].map((m) => m[1]);
+    const stories = ids.map((id, i) => ({ ...(typeof obj === 'function' ? obj(id, i) : obj), id }));
+    return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ stories }) }] } }] }), text: async () => '' };
+  });
+}
+
 // ---------------------------------------------------------------------------------------------
 describe('slug and text helpers', () => {
   test('slugify folds case, accents and punctuation', () => {
@@ -219,7 +229,9 @@ describe('new categories', () => {
     );
     expect(f.category).toBe('telecom');
     expect(f.isTech).toBe(true);
-    expect(f.whatToDo.length).toBeGreaterThan(0);
+    // No canned "Nothing to do": telecom gets a useful "Good to know" tip instead of fake steps.
+    expect(f.whatToDo.length + f.goodToKnow.length).toBeGreaterThan(0);
+    expect(f.affectsWho).toContain('Jio');
   });
 });
 
@@ -337,7 +349,7 @@ describe('story writer', () => {
   });
 
   test('rejects missing fields, bad types and copied text', () => {
-    expect(() => validateStoryJson({ ...goodAiJson, whatToDo: [] }, writerInput(), 'm')).toThrow(StoryValidationError);
+    expect(() => validateStoryJson({ ...goodAiJson, whatToDo: 'x' }, writerInput(), 'm')).toThrow(StoryValidationError);
     expect(() => validateStoryJson({ ...goodAiJson, headline: 42 }, writerInput(), 'm')).toThrow(StoryValidationError);
     expect(() => validateStoryJson({ ...goodAiJson, scam: null }, writerInput(), 'm')).toThrow(/scam details/);
     expect(() => validateStoryJson('nope', writerInput(), 'm')).toThrow(StoryValidationError);
@@ -366,11 +378,17 @@ describe('story writer', () => {
     expect(f.needsEnrichment).toBe(true);
     expect(f.category).toBe('scams-security');
     expect(f.scam?.ifTargeted.join(' ')).toContain('1930');
-    for (const k of ['headline', 'whatHappened', 'affectsWho', 'whatItMeans'] as const) expect(f[k].length).toBeGreaterThan(10);
+    for (const k of ['headline', 'tldr', 'affectsWho'] as const) expect(f[k].length).toBeGreaterThan(10);
     expect(f.whatToDo.length).toBeGreaterThanOrEqual(1);
     expect(f.whatToDo.length).toBeLessThanOrEqual(3);
+    // Story-specific, never the old canned text.
+    expect(f.tldr).toMatch(/Chennai/);
+    expect(JSON.stringify(f)).not.toMatch(/written automatically|Nothing to do|open the original report/i);
     // Fallback never copies the report body.
-    expect(findCopiedRun(f.whatHappened, [writerInput().sources[0].snippet], 10)).toBeNull();
+    const body = [f.tldr, f.whatHappened, f.affectsWho, ...f.whatToDo, f.scam!.howItWorks, ...f.faq.map((x) => x.a)].join(' ');
+    expect(findCopiedRun(body, [writerInput().sources[0].snippet], 10)).toBeNull();
+    expect(f.faq.length).toBeGreaterThanOrEqual(1);
+    expect(f.faq.length).toBeLessThanOrEqual(2);
   });
 
   test('fallback for a non-scam phone story', () => {
@@ -395,7 +413,7 @@ describe('story writer', () => {
     const body = JSON.parse(fetchFn.mock.calls[0][1].body);
     expect(body.generationConfig.responseMimeType).toBe('application/json');
     const b = await writer.write(writerInput());
-    expect(b?.aiModel).toBe('techdaily-fallback-v2');
+    expect(b?.aiModel).toBe('techdaily-fallback-v3');
     expect(writer.stats.rateLimited).toBe(true);
     expect(writer.aiAvailable()).toBe(false);
     const c = await writer.write(writerInput(), false);
@@ -453,7 +471,7 @@ describe('store conversion and cache', () => {
     expect(typeof doc.publishedAt.toDate).toBe('function');
     expect(doc.sourceCount).toBe(1);
     const back = docToStory(doc);
-    expect(back).toEqual({ ...s, image: null, imageTries: 0 });
+    expect(back).toEqual({ ...s, image: null, imageTries: 0, tldr: '', keyNumbers: [], goodToKnow: '', faq: [] });
   });
 
   test('cache saves, loads and indexes URLs', () => {
@@ -530,7 +548,8 @@ ${items.map(([t, l, h, d]) => `<item><title><![CDATA[${t}]]></title><link>${l}</
     for (const s of r.changed) {
       expect(s.developing).toBe(true); // fallback => low confidence
       expect(s.needsEnrichment).toBe(true);
-      expect(s.whatToDo.length).toBeGreaterThan(0);
+      expect(JSON.stringify(s)).not.toMatch(/written automatically|Nothing to do/);
+      expect(s.promptVersion).toBe('stories-v3');
     }
     const rbi = r.changed.find((s) => s.sources[0].sourceId === 'rbi-press')!;
     expect(rbi.region).toBe('IN');
@@ -545,9 +564,10 @@ ${items.map(([t, l, h, d]) => `<item><title><![CDATA[${t}]]></title><link>${l}</
     const cache = new StoryCache();
     await runStoryPipeline({ dryRun: true, feeds, fetchText, imageFetchBudget: 0, now: NOW }, { cache, writer: new StoryWriter({ apiKey: '' }) });
     const aiJson = { ...goodAiJson, isScam: false, scam: null, category: 'money-fintech', headline: 'A simple AI headline here' };
-    const fetchFn = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(aiJson) }] } }] }), text: async () => '' });
+    const fetchFn = geminiEcho(aiJson);
     const r = await runStoryPipeline({ dryRun: true, feeds, fetchText, imageFetchBudget: 0, now: NOW + H }, { cache, writer: new StoryWriter({ apiKey: 'k', fetchFn: fetchFn as any }) });
     expect(r.storiesEnriched).toBe(3);
+    expect(fetchFn).toHaveBeenCalledTimes(1); // all three in one batched call
     const s = cache.all()[0];
     expect(s.needsEnrichment).toBe(false);
     expect(s.confidence).toBe('medium');
@@ -589,7 +609,7 @@ ${items.map(([t, l, h, d]) => `<item><title><![CDATA[${t}]]></title><link>${l}</
   test('a cluster the AI marks isTech=false is discarded and not retried next run', async () => {
     const cache = new StoryCache();
     const aiJson = { ...goodAiJson, isScam: false, scam: null, category: 'innovations', headline: 'Not a tech story at all', isTech: false };
-    const fetchFn = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(aiJson) }] } }] }), text: async () => '' });
+    const fetchFn = geminiEcho(aiJson);
     const writer = new StoryWriter({ apiKey: 'k', fetchFn: fetchFn as any });
     const r = await runStoryPipeline({ dryRun: true, feeds, fetchText, imageFetchBudget: 0, now: NOW }, { cache, writer });
     expect(r.storiesCreated).toBe(0);
@@ -638,9 +658,12 @@ describe('renderer', () => {
     expect(html).toMatch(/<meta name="description" content="[^"<>]+">/);
     expect(html).not.toContain('<script>alert');
     expect(html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &quot;quotes&quot;');
-    for (const section of ['What happened', 'Does it affect me?', 'What to do', 'How the trick works', 'Warning signs', 'What to do if you’re targeted', 'What this means for you', 'Read the original']) {
+    // Scam stories use the scam question set.
+    for (const section of ['What’s the trick?', 'Am I at risk?', 'Spot the signs', 'If it happened to you', 'Why it matters', 'Read the original']) {
       expect(html).toContain(section);
     }
+    // The old canned "Nothing to do" step is never shown.
+    expect(html).not.toContain('Nothing to do');
     expect(html).toContain('Developing');
     expect(html).toContain('Read the official advisory');
     expect(html).toContain('href="https://wa.me/?text=');

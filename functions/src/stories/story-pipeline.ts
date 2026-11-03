@@ -11,11 +11,11 @@ import { PushService, BREAKING_TOPIC } from '../notifications/push-service';
 import { classify, CategoryId } from './categories';
 import { clusterItems, Cluster, ClusterSeed } from './clusterer';
 import { isLowValueTitle, STORY_FEEDS, StoryFeed } from './feeds';
-import { pickTodayInFive, TodayInFive } from './ranking';
+import { pickTodayInFive, rankStories, TodayInFive } from './ranking';
 import { StoryCache, writeStories, writeTodayInFive, deleteStories } from './story-store';
 import { fallbackStory, StoryWriter, WriterInput, WriterSource, WrittenStory, WriterStats } from './story-writer';
 import { sha, storyIdFor, storySlug } from './text';
-import { NewsItem, Story, StorySource } from './types';
+import { NewsItem, Story, StorySource, STORY_PROMPT_VERSION } from './types';
 import { isNonTechStory, isTechItem, storyTechVerdict } from './tech-filter';
 import { ImageCandidate, ImageResolveStats, pickBestImage, resolveMissingImages, storedImageScore, imageScore, SourcedCandidate } from './images';
 
@@ -45,6 +45,10 @@ export interface StoryIngestOptions {
   timeBudgetMs?: number;
   /** Re-enrich fallback stories published within this many hours. */
   enrichWindowHours?: number;
+  /** Rewrite stories written with an older prompt version published within this many hours (default 7 days). */
+  rewriteWindowHours?: number;
+  /** Max older-version fallback stories re-built with the current rule-based writer per run (default 200). */
+  fallbackRefreshLimit?: number;
   fetchText?: (url: string) => Promise<string>;
   now?: number;
   feeds?: StoryFeed[];
@@ -89,6 +93,8 @@ export interface StoryIngestResult {
   storiesCreated: number;
   storiesUpdated: number;
   storiesEnriched: number;
+  /** Older-version fallback cards rebuilt with the current rule-based writer. */
+  storiesRefreshed: number;
   writer: WriterStats & { model: string; geminiKey: boolean };
   firestoreWrites: number;
   changed: Story[];
@@ -261,10 +267,14 @@ export function applyWritten(base: Story, w: WrittenStory, nowIso: string): Stor
     ...base,
     headline: w.headline,
     category: w.category,
+    tldr: w.tldr,
+    keyNumbers: w.keyNumbers,
     whatHappened: w.whatHappened,
     affectsWho: w.affectsWho,
     whatToDo: w.whatToDo,
+    goodToKnow: w.goodToKnow,
     whatItMeans: w.whatItMeans,
+    faq: w.faq,
     scam: w.scam,
     confidence: w.confidence,
     unconfirmed: w.unconfirmed,
@@ -410,14 +420,17 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
       return tb - ta;
     });
 
-  for (const c of newClusters) {
-    const input: WriterInput = {
-      storyId: storyIdFor([...c.items].sort((a, b) => a.publishedAtMs - b.publishedAtMs)[0].canonicalUrl),
-      sources: c.items.map(writerSource),
-      categoryHint: categoryHintFor(c.items),
-    };
-    // Past the time budget: still create the story, but with the fallback writer (no AI wait).
-    const w = Date.now() < deadline ? await writer.write(input, true) : fallbackStory(input);
+  const newInputs: WriterInput[] = newClusters.map((c) => ({
+    storyId: storyIdFor([...c.items].sort((a, b) => a.publishedAtMs - b.publishedAtMs)[0].canonicalUrl),
+    sources: c.items.map(writerSource),
+    categoryHint: categoryHintFor(c.items),
+  }));
+  // Batched AI (4-6 stories per call, most important first); past the time budget the rest get the
+  // fallback writer (no AI wait).
+  const newWritten = await writer.writeMany(newInputs, { allowFallback: true, deadline });
+  for (let ci = 0; ci < newClusters.length; ci++) {
+    const c = newClusters[ci];
+    const w = newWritten[ci] ?? fallbackStory(newInputs[ci]);
     if (!w) continue;
     if (!w.isTech) {
       // Gemini judged it not technology news: discard (and don't ask again next run).
@@ -440,20 +453,22 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
     }
   }
 
-  // 5. Re-enrich fallback stories (newest first) while AI budget and time remain
+  // 5. Re-enrich fallback stories and rewrite stories from older prompt versions (stories-v3 question
+  //    sets) while AI budget and time remain: stories that just gained sources first, then Top
+  //    stories, then newest. Batched like new stories.
   const enrichWindow = (opts.enrichWindowHours ?? 72) * HOUR;
-  const candidates = [
-    ...enrichFirst.map((id) => cache.stories.get(id)!).filter(Boolean),
-    ...cache
-      .all()
-      .filter((s) => s.needsEnrichment && s.enrichAttempts < 3 && now - new Date(s.publishedAt).getTime() <= enrichWindow)
-      .filter((s) => !enrichFirst.includes(s.id)),
-  ];
-  for (const s of candidates) {
-    if (!writer.aiAvailable() || Date.now() > deadline) break;
-    if (!s.needsEnrichment) continue;
+  const rewriteWindow = (opts.rewriteWindowHours ?? 168) * HOUR;
+  const ageOk = (s: Story, win: number) => now - new Date(s.publishedAt).getTime() <= win;
+  const stale = (s: Story) => s.promptVersion !== STORY_PROMPT_VERSION;
+  const wants = (s: Story) =>
+    (s.needsEnrichment && s.enrichAttempts < 3 && ageOk(s, enrichWindow)) || (stale(s) && s.enrichAttempts < 6 && ageOk(s, rewriteWindow));
+  const topIds = new Set([...pickTodayInFive(cache.all(), now).storyIds, ...rankStories(cache.all(), now).slice(0, 20).map((s) => s.id)]);
+  const pool = cache.all().filter((s) => wants(s) && !enrichFirst.includes(s.id));
+  pool.sort((a, b) => Number(topIds.has(b.id)) - Number(topIds.has(a.id)) || b.publishedAt.localeCompare(a.publishedAt));
+  const candidates = [...enrichFirst.map((id) => cache.stories.get(id)!).filter(Boolean), ...pool];
+  const inputFor = async (s: Story): Promise<WriterInput> => {
     const stored = privateSnippets.get(s.id) ?? (await loadPrivateSnippets(dry ? undefined : deps.db, s.id));
-    const input: WriterInput = {
+    return {
       storyId: s.id,
       sources: s.sources.map((x) => {
         const key = canonical(x.url);
@@ -468,20 +483,46 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
       }),
       categoryHint: s.category,
     };
-    const w = await writer.write(input, false);
-    if (w && !w.isTech) {
-      nonTechByAi++;
-      changed.delete(s.id);
-      removeStory(s);
-      continue;
-    }
-    const next: Story = w ? applyWritten(s, w, nowIso) : { ...s, enrichAttempts: s.enrichAttempts + 1, updatedAt: nowIso };
-    if (w) {
-      next.enrichAttempts = s.enrichAttempts + 1;
-      enriched++;
-    }
+  };
+  let cursor = 0;
+  while (cursor < candidates.length && writer.aiAvailable() && Date.now() <= deadline) {
+    const chunk = candidates.slice(cursor, cursor + writer.batchSize).filter((s) => cache.stories.has(s.id));
+    cursor += writer.batchSize;
+    if (!chunk.length) continue;
+    const inputs = await Promise.all(chunk.map(inputFor));
+    const written = await writer.writeMany(inputs, { allowFallback: false, deadline });
+    chunk.forEach((s, k) => {
+      const w = written[k];
+      if (w && !w.isTech) {
+        nonTechByAi++;
+        changed.delete(s.id);
+        removeStory(s);
+        return;
+      }
+      const next: Story = w ? applyWritten(s, w, nowIso) : { ...s, enrichAttempts: s.enrichAttempts + 1, updatedAt: nowIso };
+      if (w) {
+        next.enrichAttempts = s.enrichAttempts + 1;
+        enriched++;
+      }
+      cache.upsert(next);
+      changed.set(next.id, next);
+    });
+  }
+
+  // 5b. Without AI left: older-version fallback cards are rebuilt with the current (story-specific)
+  //     rule-based writer so no story keeps the old canned text. They stay needsEnrichment.
+  let refreshed = 0;
+  const refreshLimit = opts.fallbackRefreshLimit ?? 200;
+  for (const s of candidates) {
+    if (refreshed >= refreshLimit) break;
+    const cur = cache.stories.get(s.id);
+    if (!cur || !stale(cur) || !cur.aiModel.startsWith('techdaily-fallback')) continue;
+    const w = fallbackStory(await inputFor(cur));
+    const next = applyWritten(cur, { ...w, headline: cur.headline, category: w.scam ? w.category : cur.category }, nowIso);
+    next.needsEnrichment = true;
     cache.upsert(next);
     changed.set(next.id, next);
+    refreshed++;
   }
 
   // 6. Images: one og:image page fetch per story still without an image (new/changed first,
@@ -554,6 +595,7 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
     storiesCreated: created,
     storiesUpdated: updated,
     storiesEnriched: enriched,
+    storiesRefreshed: refreshed,
     writer: { ...writer.stats, model: writer.model, geminiKey: writer.hasApiKey() },
     firestoreWrites: writes,
     changed: changedList,

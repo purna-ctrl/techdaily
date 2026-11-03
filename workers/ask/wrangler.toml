@@ -1,0 +1,19 @@
+# TechDaily "Ask your own question" Worker. Not deployed by CI.
+#   npx wrangler deploy                      (from workers/ask/)
+#   npx wrangler secret put GEMINI_API_KEY   (paste the key; never commit it)
+name = "techdaily-ask"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+# Extra allowed origins, comma-separated (techdaily-prod.web.app is always allowed).
+ALLOWED_ORIGINS = ""
+# Questions per IP per minute.
+RATE_LIMIT = "8"
+GEMINI_MODEL = "gemini-flash-lite-latest"
+
+# Optional: a KV namespace makes the rate limit shared across Cloudflare isolates.
+#   npx wrangler kv namespace create RL   -> paste the id below and uncomment.
+# [[kv_namespaces]]
+# binding = "RL"
+# id = "<your-kv-namespace-id>"

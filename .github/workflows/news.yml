@@ -50,6 +50,7 @@ jobs:
         run: |
           flutter pub get
           flutter build web --release
+          python3 tool/web/fingerprint_fonts.py build/web
 
       - if: steps.webcache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4

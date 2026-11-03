@@ -41,3 +41,14 @@ const String kDataSource = String.fromEnvironment(
   'TECHDAILY_DATA_SOURCE',
   defaultValue: 'firestore',
 );
+
+/// "Ask your own question" backend for stories (ASK_ENDPOINT). Empty by
+/// default: answers then come from the story itself on the device (its FAQ,
+/// the jargon dictionary and its sections). Set it to the deployed Cloudflare
+/// Worker (`workers/ask/`) URL, here or at build time with
+/// `--dart-define=ASK_ENDPOINT=https://techdaily-ask.<you>.workers.dev/ask`.
+/// Contract: POST JSON `{slug, question, story}` -> `{answer}`.
+const String kAskEndpoint = String.fromEnvironment('ASK_ENDPOINT', defaultValue: '');
+
+/// Longest question the ask box accepts (the Worker enforces the same).
+const int kAskMaxChars = 300;

@@ -76,7 +76,7 @@ export function pickTodayInFive(stories: Story[], now = Date.now(), count = 5): 
       slug: s.slug,
       headline: s.headline,
       category: s.category,
-      whatItMeans: s.whatItMeans,
+      whatItMeans: s.whatItMeans || s.tldr || '',
       sourceCount: new Set(s.sources.map((x) => x.url)).size,
       publishedAt: s.publishedAt,
     })),

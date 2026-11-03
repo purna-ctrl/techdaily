@@ -4,8 +4,10 @@ Technology news — and only technology news — for everyday people in India, i
 and gadgets, chips and hardware, startups and India tech, innovations, money and fintech, privacy, scams &
 security, telecom & internet, Digital India, EVs & mobility, space tech, apps & gaming, health tech, and
 tech jobs & skills.
-Every story says **what happened**, **does it affect me?**, **what to do**, and **what this means for you**,
-with links to every original report.
+Every story opens with an **"In one line"** summary and **Key numbers** (prices, dates, %, users), then answers
+four questions tailored to its category (e.g. Space: *What happened? · Why should I care? · Cool fact · What's next*;
+Scams: *What's the trick? · Am I at risk? · Spot the signs · If it happened to you*), plus **Ask about this**
+(likely reader questions, and an "Ask your own question" box), with links to every original report.
 
 Live: https://techdaily-prod.web.app (Firebase **Spark / free** plan — no Cloud Functions, no SSR).
 
@@ -13,8 +15,10 @@ Live: https://techdaily-prod.web.app (Firebase **Spark / free** plan — no Clou
 
 ```
 GitHub Actions (hourly, news.yml)
-  ingest  → fetch ~65 RSS feeds → purely-tech gate (tech-filter.ts) → cluster reports about the same event → one Gemini call per story
-            (gemini-flash-lite-latest, JSON, original words) or rule-based fallback → Firestore `stories`
+  ingest  → fetch ~65 RSS feeds → purely-tech gate (tech-filter.ts) → cluster reports about the same event → Gemini writes
+            4-6 stories per call (gemini-flash-lite-latest, JSON keyed by story id, original words, per-category questions,
+            prompt `stories-v3`; 40 calls/run ≈ 200 stories/hour; GEMINI_BATCH_SIZE) or a story-specific rule-based fallback
+            → older-version stories rewritten newest/Top first → Firestore `stories`
             → "Today in 5" (`storyBriefs/latest`)
   render  → static HTML into the Flutter web build: /story/<slug>/, /c/<category>/, sitemap.xml,
             rss.xml, robots.txt, /data/feed.json (the app's data), SEO block in /index.html
@@ -27,6 +31,9 @@ GitHub Actions (hourly, news.yml)
 | `functions/src/stories/` | v2 pipeline: `feeds.ts`, `clusterer.ts`, `story-writer.ts`, `story-pipeline.ts`, `ranking.ts`, `story-store.ts`, `migrate.ts`, `render/`. |
 | `functions/src/jobs.ts` | CLI run by the workflows: `ingest`, `render`, `daily-brief`, `migrate-articles`, `purge-non-tech` (+ legacy `ingest-articles`, `purge-seed`). |
 | Purely tech | `functions/src/stories/tech-filter.ts`: a keyword gate drops politics, sports, celebrity, stock-market-only and other non-tech items at ingest (mixed-beat feeds must show a tech signal); Gemini also answers `isTech` and `false` discards the story. Each hourly ingest removes stored non-tech stories (cache + Firestore) and remembers their URLs; `purge-non-tech` scans all of Firestore (dry run unless `--apply`; Maintenance workflow with dry_run unchecked). |
+| Questions | `functions/src/stories/questions.ts` (per-category labels + what the writer puts under each) mirrored in `lib/core/constants/story_questions.dart` (a test keeps them in sync). Section keys stay `whatHappened / affectsWho / whatToDo / whatItMeans`; new fields `tldr`, `keyNumbers`, `goodToKnow`, `faq`. |
+| Ask | "Ask your own question" answers on the device (FAQ + jargon + story sections) unless `ASK_ENDPOINT` (`lib/core/config/app_config.dart` or `--dart-define`) points at the Cloudflare Worker in `workers/ask/` (not deployed; see its README). |
+| Web fonts | `tool/web/fingerprint_fonts.py` gives fonts content-hashed names after `flutter build web` (CI runs it) so phones never pair new code with a stale cached icon font. |
 | `web/og/` | Generated 1200×630 category preview images (`python3 tool/og/generate_og.py`). Used only when a story has no photo. |
 | `web/art/`, `tool/art/` | Generated category artwork (`python3 tool/art/generate_art.py`), the fallback behind every story photo. |
 | Story photos | Publisher images are **hotlinked, never downloaded or rehosted**, always shown with an "Image: Source" credit linking to the original. Ingest reads them from RSS media tags or og:image; `ingest --image-fetches=N` caps og:image lookups and backfill per run (default 60). |

@@ -312,14 +312,20 @@ class _ListenButtonState extends State<ListenButton> {
     super.dispose();
   }
 
-  String _script(Story s) => [
-        s.headline,
-        'What happened. ${s.whatHappened}',
-        'Does it affect me? ${s.affectsWho}',
-        if (s.scam != null) 'Warning signs. ${s.scam!.warningSigns.join('. ')}',
-        'What to do. ${s.whatToDo.join('. ')}',
-        'What this means for you. ${s.whatItMeans}',
-      ].join('\n');
+  String _script(Story s) {
+    final d = s.display;
+    final q = s.questions;
+    String part(String label, String text) => text.trim().isEmpty ? '' : '$label ${text.trim()}';
+    return [
+      s.headline,
+      d.tldr,
+      part(q.whatHappened.label, [d.whatHappened, if (s.scam != null) s.scam!.howItWorks].join(' ')),
+      part(q.affectsWho.label, d.affectsWho),
+      if (s.scam != null) part('Spot the signs.', s.scam!.warningSigns.join('. ')),
+      d.whatToDo.isNotEmpty ? part(q.whatToDo.label, d.whatToDo.join('. ')) : part('Good to know.', d.goodToKnow),
+      part(q.whatItMeans.label, d.whatItMeans),
+    ].where((x) => x.trim().isNotEmpty).join('\n');
+  }
 
   @override
   Widget build(BuildContext context) {

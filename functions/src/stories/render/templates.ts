@@ -10,6 +10,7 @@
  * Layout never shifts: media boxes have a fixed aspect ratio and <img> carries width/height.
  */
 import { CATEGORIES, categoryLabel, TOP_STORIES } from '../categories';
+import { displayFields, FALLBACK_PILL, GOOD_TO_KNOW_LABEL, KEY_NUMBERS_LABEL, ListStyle, questionsFor, TLDR_LABEL } from '../questions';
 import { escapeHtml as h, escapeXml, formatIst, jsonForScript, truncate } from '../text';
 import { Story } from '../types';
 import { TodayInFive } from '../ranking';
@@ -36,7 +37,9 @@ export function whatsappUrl(headline: string, url: string): string {
 }
 
 export function metaDescription(s: Story): string {
-  return truncate(`${s.whatHappened} ${s.whatItMeans}`.replace(/\s+/g, ' '), 158);
+  const d = displayFields(s);
+  const text = [d.tldr, d.whatHappened, d.whatItMeans].filter(Boolean).join(' ') || `${s.headline}. Explained in simple words by TechDaily.`;
+  return truncate(text.replace(/\s+/g, ' '), 158);
 }
 
 export function sourceNames(s: Story): string[] {
@@ -118,6 +121,21 @@ h2{font:700 20px/1.25 var(--disp);letter-spacing:-.2px;margin:0 0 8px}
 .todo li:before{content:"";position:absolute;left:2px;top:10px;width:24px;height:24px;border-radius:50%;background:var(--c) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230B0B0F' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E") center/16px no-repeat}
 .card.mean{border:1.5px solid transparent;background:linear-gradient(#16161C,#16161C) padding-box,linear-gradient(135deg,var(--c),rgba(255,255,255,.08) 55%,var(--c)) border-box;box-shadow:0 20px 50px -28px var(--cg)}
 .card.mean p{font-size:18px;line-height:1.55}
+.auto{margin:12px 0 0}.auto span{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:var(--gl);border:1px solid var(--gb);color:var(--mu);font:600 12.5px/1.2 Inter,system-ui,sans-serif}
+.tldr{margin:14px 0;padding:16px 18px;border-radius:22px;background:var(--cs);border:1px solid var(--cg)}
+.tldr h2,.kn h2{margin:0 0 6px;font:800 11.5px/1.2 Inter,system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--ct)}
+.tldr p{margin:0;font-size:18.5px;line-height:1.45;font-weight:600}
+.kn{margin:14px 0}.kn ul{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
+.kn li{display:flex;flex-direction:column;padding:9px 13px;border-radius:16px;background:var(--gl);border:1px solid var(--gb);min-width:92px}
+.kn b{font:700 18px/1.15 var(--disp);color:var(--ink)}.kn span{font-size:12px;color:var(--mu)}
+.bul li{position:relative;padding:6px 0 6px 22px}.bul li:before{content:"";position:absolute;left:4px;top:15px;width:8px;height:8px;border-radius:50%;background:var(--c)}
+.fact{font-size:17.5px;line-height:1.5;padding-left:12px;border-left:3px solid var(--c)}
+.faq details{border:1px solid var(--gb);border-radius:16px;margin:8px 0;background:var(--gl)}
+.faq summary{cursor:pointer;list-style:none;padding:11px 40px 11px 14px;font-weight:600;position:relative;min-height:44px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary:after{content:"+";position:absolute;right:14px;top:9px;font:700 20px/1 var(--disp);color:var(--ct)}
+.faq details[open] summary:after{content:"–"}
+.faq details p{margin:0;padding:0 14px 12px;color:var(--ink)}
 .card.scam{border-color:rgba(255,59,78,.55);background:linear-gradient(180deg,rgba(255,59,78,.1),rgba(255,59,78,.04));box-shadow:0 0 0 1px rgba(255,59,78,.15),0 18px 50px -30px rgba(255,59,78,.6)}
 .card.scam h2{color:var(--redt)}.card.scam .hi{background:rgba(255,59,78,.18);color:var(--redt)}
 .signs li{position:relative;padding:7px 0 7px 32px}.signs li .ic{position:absolute;left:2px;top:10px;color:var(--warn)}
@@ -347,6 +365,73 @@ function section(id: string, title: string, icon: string, body: string, cls = ''
 }
 
 const todoList = (items: string[]) => `<ol class="todo">${items.map((x) => `<li>${h(x)}</li>`).join('')}</ol>`;
+const bulletList = (items: string[]) => `<ul class="bul">${items.map((x) => `<li>${h(x)}</li>`).join('')}</ul>`;
+
+function listBody(items: string[], style: ListStyle): string {
+  if (style === 'fact') return `<p class="fact">${h(items.join(' '))}</p>`;
+  return style === 'bullets' ? bulletList(items) : todoList(items);
+}
+
+/** "In one line" TL;DR + "Key numbers" chips + the fallback pill. */
+function storyTop(s: Story): string {
+  const d = displayFields(s);
+  const nums = (s.keyNumbers ?? []).filter((k) => k.value && k.label);
+  const pill = isFallback(s) ? `<p class="auto"><span>${h(FALLBACK_PILL)}</span></p>` : '';
+  const tl = d.tldr ? `<section class="tldr" aria-labelledby="h-tldr"><h2 id="h-tldr">${h(TLDR_LABEL)}</h2><p>${h(d.tldr)}</p></section>` : '';
+  const kn = nums.length
+    ? `<section class="kn" aria-labelledby="h-kn"><h2 id="h-kn">${h(KEY_NUMBERS_LABEL)}</h2><ul>${nums.map((k) => `<li><b>${h(k.value)}</b><span>${h(k.label)}</span></li>`).join('')}</ul></section>`
+    : '';
+  return pill + tl + kn;
+}
+
+/** "Ask about this": tappable questions that open to short answers (no JS needed). */
+function faqSection(s: Story): string {
+  const faq = (s.faq ?? []).filter((f) => f.q && f.a);
+  if (!faq.length) return '';
+  return section(
+    'h-ask',
+    'Ask about this',
+    UI_ICONS.ask,
+    `<div class="faq">${faq.map((f) => `<details><summary>${h(f.q)}</summary><p>${h(f.a)}</p></details>`).join('')}</div>`
+  );
+}
+
+/** The per-category question sections (scam stories use the scam set). */
+function storySections(s: Story): string {
+  const d = displayFields(s);
+  const qs = questionsFor(s.category, Boolean(s.scam));
+  const out: string[] = [];
+  const text = (id: string, label: string, icon: string, t: string, cls = '') => (t ? out.push(section(id, label, icon, `<p>${h(t)}</p>`, cls)) : 0);
+  const todo = () => {
+    if (d.whatToDo.length) out.push(section('h-todo', qs.whatToDo.label, qs.whatToDo.style === 'fact' ? UI_ICONS.spark : qs.whatToDo.style === 'bullets' ? UI_ICONS.tag : UI_ICONS.check, listBody(d.whatToDo, qs.whatToDo.style)));
+    else if (d.goodToKnow) out.push(section('h-todo', GOOD_TO_KNOW_LABEL, UI_ICONS.info, `<p>${h(d.goodToKnow)}</p>`));
+  };
+  if (s.scam) {
+    const trick = [d.whatHappened, s.scam.howItWorks].filter(Boolean).join(' ');
+    text('h-what', qs.whatHappened.label, UI_ICONS.hook, trick, 'scam');
+    text('h-who', qs.affectsWho.label, UI_ICONS.person, d.affectsWho);
+    out.push(section('h-signs', 'Spot the signs', UI_ICONS.alert, `<ul class="signs">${s.scam.warningSigns.map((x) => `<li>${iconSvg(UI_ICONS.alert, 16)}${h(x)}</li>`).join('')}</ul>`, 'scam'));
+    todo();
+    out.push(
+      section(
+        'h-target',
+        'If it happened to you',
+        UI_ICONS.shield,
+        `<ol class="steps">${s.scam.ifTargeted.map((x) => `<li>${h(x)}</li>`).join('')}</ol>
+<div class="help"><a class="big" href="tel:1930" aria-label="Call the cyber-crime helpline 1930">${iconSvg(UI_ICONS.phone, 26)}1930</a><p class="note" style="flex:1 1 200px;margin:0">India’s cyber-crime helpline. Or report at <a href="https://cybercrime.gov.in">cybercrime.gov.in</a>.</p></div>
+${s.scam.advisoryUrl ? `<p class="row"><a class="btn red" href="${h(s.scam.advisoryUrl)}" rel="noopener">${iconSvg(UI_ICONS.shield, 16)}Read the official advisory</a></p>` : ''}`,
+        'scam'
+      )
+    );
+    text('h-mean', qs.whatItMeans.label, UI_ICONS.bulb, d.whatItMeans, 'mean');
+  } else {
+    text('h-what', qs.whatHappened.label, UI_ICONS.news, d.whatHappened);
+    text('h-who', qs.affectsWho.label, UI_ICONS.person, d.affectsWho);
+    todo();
+    text('h-mean', qs.whatItMeans.label, /next/i.test(qs.whatItMeans.label) ? UI_ICONS.next : UI_ICONS.bulb, d.whatItMeans, 'mean');
+  }
+  return out.join('\n');
+}
 
 /** Image card for grids (related stories, category pages, home). */
 export function storyCard(s: Story): string {
@@ -373,20 +458,6 @@ export function renderStoryPage(s: Story, ctx: SiteContext, related: Story[] = [
 `;
   const image = s.image ? s.image.url : ogImageFor(ctx, s.category);
   const imageSize = s.image ? { width: s.image.width, height: s.image.height } : undefined;
-  const todo = section('h-todo', 'What to do', UI_ICONS.check, todoList(s.whatToDo));
-  const scam = s.scam
-    ? `${section('h-how', 'How the trick works', UI_ICONS.hook, `<p>${h(s.scam.howItWorks)}</p>`, 'scam')}
-${section('h-signs', 'Warning signs', UI_ICONS.alert, `<ul class="signs">${s.scam.warningSigns.map((x) => `<li>${iconSvg(UI_ICONS.alert, 16)}${h(x)}</li>`).join('')}</ul>`, 'scam')}
-${section(
-  'h-target',
-  'What to do if you’re targeted',
-  UI_ICONS.shield,
-  `<ol class="steps">${s.scam.ifTargeted.map((x) => `<li>${h(x)}</li>`).join('')}</ol>
-<div class="help"><a class="big" href="tel:1930" aria-label="Call the cyber-crime helpline 1930">${iconSvg(UI_ICONS.phone, 26)}1930</a><p class="note" style="flex:1 1 200px;margin:0">India’s cyber-crime helpline. Or report at <a href="https://cybercrime.gov.in">cybercrime.gov.in</a>.</p></div>
-${s.scam.advisoryUrl ? `<p class="row"><a class="btn red" href="${h(s.scam.advisoryUrl)}" rel="noopener">${iconSvg(UI_ICONS.shield, 16)}Read the official advisory</a></p>` : ''}`,
-  'scam'
-)}`
-    : '';
   const rel = related.length
     ? `<section aria-labelledby="h-more"><div class="sec-h"><h2 id="h-more">More in ${h(categoryLabel(s.category))}</h2><a href="${categoryPath(s.category)}">See all</a></div><ul class="grid">${related.map(storyCard).join('')}</ul></section>`
     : '';
@@ -403,12 +474,9 @@ ${media(s, { eager: true })}${credit(s)}
 <p class="meta">${timeTag(s.publishedAt)} · ${names.length > 1 ? `${names.length} sources: ` : 'Source: '}${h(names.join(', '))}</p>
 </div>
 </header>
-${section('h-what', 'What happened', UI_ICONS.news, `<p>${h(s.whatHappened)}</p>`)}
-${section('h-who', 'Does it affect me?', UI_ICONS.person, `<p>${h(s.affectsWho)}</p>`)}
-${s.scam ? '' : todo}
-${scam}
-${s.scam ? todo : ''}
-${section('h-mean', 'What this means for you', UI_ICONS.bulb, `<p>${h(s.whatItMeans)}</p>`, 'mean')}
+${storyTop(s)}
+${storySections(s)}
+${faqSection(s)}
 ${section(
   'h-orig',
   `Read the original${s.sources.length > 1 ? 's' : ''}`,
@@ -416,7 +484,7 @@ ${section(
   `<ul class="srcs">${s.sources
     .map((x) => `<li><a href="${h(x.url)}" rel="noopener">${h(x.name)}${x.title ? `: ${h(x.title)}` : ''}</a><br><span class="note">${timeTag(x.publishedAt)}</span></li>`)
     .join('')}</ul>
-<p class="note" style="margin-top:8px">${isFallback(s) ? 'Short version written automatically from the report headline' : 'Written in simple words by AI from the reports above'}; last updated ${timeTag(s.updatedAt)}.${s.image ? ` Image: ${h(s.image.sourceName)}, linked from the original report.` : ''}</p>`
+<p class="note" style="margin-top:8px">${isFallback(s) ? 'A simplified summary of the reports above; a fuller explanation is on its way' : 'Written in simple words by AI from the reports above'}; last updated ${timeTag(s.updatedAt)}.${s.image ? ` Image: ${h(s.image.sourceName)}, linked from the original report.` : ''}</p>`
 )}
 <section aria-labelledby="h-share" class="card"><h2 id="h-share">Share this story</h2>${shareBlock(s, url)}
 <p class="row"><a class="btn alt" href="/app/story/${encodeURIComponent(s.slug)}">${iconSvg(UI_ICONS.arrow, 16)}Open in app</a></p></section>

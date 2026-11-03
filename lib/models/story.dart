@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 
 import '../core/config/app_config.dart';
 import '../core/constants/story_categories.dart';
+import '../core/constants/story_questions.dart';
 
 DateTime _date(dynamic v) {
   if (v is DateTime) return v;
@@ -71,6 +72,42 @@ class ScamInfo {
       };
 }
 
+/// "Key numbers" chip: a number that appears in the reports.
+class KeyNumber {
+  final String value;
+  final String label;
+  const KeyNumber(this.value, this.label);
+
+  static List<KeyNumber> listFrom(dynamic v) => v is List
+      ? v
+          .whereType<Map>()
+          .map((m) => KeyNumber((m['value'] ?? '').toString(), (m['label'] ?? '').toString()))
+          .where((k) => k.value.isNotEmpty && k.label.isNotEmpty)
+          .take(4)
+          .toList()
+      : const [];
+
+  Map<String, dynamic> toMap() => {'value': value, 'label': label};
+}
+
+/// One "Ask about this" question with a short answer.
+class FaqItem {
+  final String q;
+  final String a;
+  const FaqItem(this.q, this.a);
+
+  static List<FaqItem> listFrom(dynamic v) => v is List
+      ? v
+          .whereType<Map>()
+          .map((m) => FaqItem((m['q'] ?? '').toString(), (m['a'] ?? '').toString()))
+          .where((f) => f.q.isNotEmpty && f.a.isNotEmpty)
+          .take(4)
+          .toList()
+      : const [];
+
+  Map<String, dynamic> toMap() => {'q': q, 'a': a};
+}
+
 /// The publisher's lead image: hotlinked (never copied) and always shown
 /// with a visible "Image: sourceName" credit linking to [sourceUrl].
 class StoryImage {
@@ -115,16 +152,21 @@ class Story {
   final DateTime publishedAt;
   final DateTime updatedAt;
   final List<StorySource> sources;
+  final String tldr;
+  final List<KeyNumber> keyNumbers;
   final String whatHappened;
   final String affectsWho;
   final List<String> whatToDo;
+  final String goodToKnow;
   final String whatItMeans;
+  final List<FaqItem> faq;
   final ScamInfo? scam;
   final String confidence;
   final bool developing;
   final String aiModel;
   final String region;
   final StoryImage? image;
+  final String promptVersion;
 
   const Story({
     required this.id,
@@ -138,6 +180,11 @@ class Story {
     required this.affectsWho,
     required this.whatToDo,
     required this.whatItMeans,
+    this.tldr = '',
+    this.keyNumbers = const [],
+    this.goodToKnow = '',
+    this.faq = const [],
+    this.promptVersion = '',
     this.scam,
     this.confidence = 'medium',
     this.developing = false,
@@ -165,6 +212,11 @@ class Story {
       affectsWho: (m['affectsWho'] ?? '').toString(),
       whatToDo: _strings(m['whatToDo']),
       whatItMeans: (m['whatItMeans'] ?? '').toString(),
+      tldr: (m['tldr'] ?? '').toString(),
+      keyNumbers: KeyNumber.listFrom(m['keyNumbers']),
+      goodToKnow: (m['goodToKnow'] ?? '').toString(),
+      faq: FaqItem.listFrom(m['faq']),
+      promptVersion: (m['promptVersion'] ?? '').toString(),
       scam: ScamInfo.fromMap(m['scam']),
       confidence: (m['confidence'] ?? 'medium').toString(),
       developing: m['developing'] == true,
@@ -186,6 +238,11 @@ class Story {
         'affectsWho': affectsWho,
         'whatToDo': whatToDo,
         'whatItMeans': whatItMeans,
+        'tldr': tldr,
+        'keyNumbers': keyNumbers.map((k) => k.toMap()).toList(),
+        'goodToKnow': goodToKnow,
+        'faq': faq.map((f) => f.toMap()).toList(),
+        'promptVersion': promptVersion,
         'scam': scam?.toMap(),
         'confidence': confidence,
         'developing': developing,
@@ -211,6 +268,21 @@ class Story {
 
   bool get isScam => scam != null;
 
+  /// Per-category questions for this story (scam stories use the scam set).
+  StoryQuestionSet get questions => questionsFor(category, isScam: isScam);
+
+  /// Text actually shown (legacy boilerplate stripped).
+  StoryDisplay get display => StoryDisplay.of(
+        aiModel: aiModel,
+        promptVersion: promptVersion,
+        tldr: tldr,
+        whatHappened: whatHappened,
+        affectsWho: affectsWho,
+        whatToDo: whatToDo,
+        goodToKnow: goodToKnow,
+        whatItMeans: whatItMeans,
+      );
+
   /// Same formula as the backend ranking (recency x coverage x confidence).
   double score(DateTime now) {
     final ageH = math.max(0, now.difference(publishedAt).inMinutes / 60.0);
@@ -227,6 +299,7 @@ class Story {
     if (q.isEmpty) return false;
     final hay = [
       headline,
+      tldr,
       whatHappened,
       affectsWho,
       whatItMeans,

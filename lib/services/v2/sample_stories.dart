@@ -24,6 +24,12 @@ StoryFeed sampleStoryFeed({DateTime? now}) {
       affectsWho: 'Anyone who gets SMS messages and pays with UPI apps.',
       whatToDo: ['Ignore texts about parcels you did not order.', 'Never enter your UPI PIN to receive anything.'],
       whatItMeans: 'A tiny fee request can empty your account, so check before you pay.',
+      tldr: 'Fake “parcel on hold” texts ask for a small fee — paying it hands your UPI PIN to crooks.',
+      keyNumbers: const [KeyNumber('₹25', 'Fee asked'), KeyNumber('1930', 'Helpline')],
+      faq: const [
+        FaqItem('What if I already paid?', 'Call 1930 or report at cybercrime.gov.in quickly, and ask your bank to block UPI.'),
+        FaqItem('Do real couriers ask for fees by SMS?', 'Courier fees are paid on the official app or website, never through a random SMS link.'),
+      ],
       scam: const ScamInfo(
         howItWorks: 'You get a text saying a parcel is held. The link opens a fake payment page. When you pay, they capture your UPI PIN.',
         warningSigns: ['A parcel you never ordered', 'A link asking for a small fee', 'Pressure to pay today'],

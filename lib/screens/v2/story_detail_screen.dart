@@ -8,6 +8,7 @@ import '../../services/v2/story_share.dart';
 import '../../widgets/v2/story_parts.dart';
 import '../../widgets/v3/jargon.dart';
 import '../../widgets/v3/story_image.dart';
+import '../../widgets/v3/story_questions.dart';
 import '../../widgets/v3/story_sections.dart';
 import '../../widgets/v3/ui.dart';
 import '../../core/constants/jargon.dart';
@@ -25,7 +26,11 @@ class StoryDetailScreen extends StatelessWidget {
     final s = story;
     final cat = s.categoryInfo;
     final pad = MediaQuery.paddingOf(context);
-    final words = jargonIn([s.whatHappened, s.affectsWho, s.whatItMeans, ...s.whatToDo, if (s.scam != null) s.scam!.howItWorks]);
+    final d = s.display;
+    final words = jargonIn([d.tldr, d.whatHappened, d.affectsWho, d.whatItMeans, ...d.whatToDo, d.goodToKnow, if (s.scam != null) s.scam!.howItWorks]);
+    final sections = storySections(s);
+    // Room below the content for the floating action bar (~68 px) + its margin + the safe area.
+    final bottomRoom = 68 + 10 + pad.bottom + 28;
     Widget constrained(Widget child) => Center(
           child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: child)),
         );
@@ -117,22 +122,25 @@ class StoryDetailScreen extends StatelessWidget {
           ),
           SliverToBoxAdapter(
             child: constrained(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              StoryTopBlock(story: s),
               const SizedBox(height: 4),
-              FadeSlideIn(
-                child: SectionCard(title: 'What happened', icon: Icons.newspaper_rounded, color: cat.color, child: JargonText(s.whatHappened, accent: cat.tint)),
-              ),
-              FadeSlideIn(
-                index: 1,
-                child: SectionCard(title: 'Does it affect me?', icon: Icons.person_search_rounded, color: cat.color, child: JargonText(s.affectsWho, accent: cat.tint)),
-              ),
-              if (s.scam != null) ScamSections(scam: s.scam!),
-              SectionCard(title: 'What to do', icon: Icons.task_alt_rounded, color: cat.color, child: TickChecklist(items: s.whatToDo, color: cat.tint)),
+              for (var i = 0; i < sections.length; i++)
+                FadeSlideIn(
+                  index: i < 2 ? i : 2,
+                  child: SectionCard(
+                    title: sections[i].title,
+                    icon: sections[i].icon,
+                    color: sections[i].scam ? TD.red : cat.color,
+                    scam: sections[i].scam,
+                    highlight: sections[i].highlight,
+                    child: sections[i].body,
+                  ),
+                ),
               SectionCard(
-                title: 'What this means for you',
-                icon: Icons.lightbulb_rounded,
+                title: 'Ask about this',
+                icon: Icons.forum_rounded,
                 color: cat.color,
-                highlight: true,
-                child: JargonText(s.whatItMeans, accent: cat.tint, style: const TextStyle(fontSize: 17.5, height: 1.5)),
+                child: AskAboutThis(story: s, onOpenSources: () => showSourcesSheet(context, s)),
               ),
               if (words.isNotEmpty) ...[
                 const SizedBox(height: 18),
@@ -146,14 +154,14 @@ class StoryDetailScreen extends StatelessWidget {
                   SourceLinks(story: s, detailed: true),
                   const SizedBox(height: 6),
                   Text(
-                    '${s.isFallback ? 'Short version written automatically from the report headline. An AI-written simple version will follow.' : 'Written in simple words by AI from the reports above. Always check the original before acting on money or security advice.'}${s.image != null ? ' Image: ${s.image!.sourceName}, linked from the original report.' : ''}',
+                    '${s.isFallback ? 'A simplified summary of the reports above — a fuller explanation is on its way.' : 'Written in simple words by AI from the reports above. Always check the original before acting on money or security advice.'}${s.image != null ? ' Image: ${s.image!.sourceName}, linked from the original report.' : ''}',
                     style: const TextStyle(fontSize: 12.5, color: TD.muted, height: 1.45),
                   ),
                 ]),
               ),
               const SizedBox(height: 22),
               const NewsletterSignup(source: 'app-story'),
-              const SizedBox(height: 120),
+              SizedBox(height: bottomRoom),
             ])),
           ),
         ]),

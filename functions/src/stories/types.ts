@@ -7,6 +7,9 @@
  */
 import type { CategoryId } from './categories';
 import type { ImageCandidate, StoryImage } from './images';
+import type { KeyNumber } from './facts';
+
+export type { KeyNumber } from './facts';
 
 export type { StoryImage } from './images';
 
@@ -23,6 +26,12 @@ export interface StorySource {
   title: string;
   /** ISO time the original was published. */
   publishedAt: string;
+}
+
+/** One "Ask about this" question with a short answer. */
+export interface FaqItem {
+  q: string;
+  a: string;
 }
 
 export interface ScamDetails {
@@ -43,10 +52,19 @@ export interface Story {
   /** Last time TechDaily changed the story (ISO). */
   updatedAt: string;
   sources: StorySource[];
+  /** "In one line" TL;DR (stories-v3; empty on older stories). */
+  tldr?: string;
+  /** "Key numbers" chips: numbers that appear in the reports. */
+  keyNumbers?: KeyNumber[];
+  /** Section keys are stable; the question shown above each depends on the category (questions.ts). */
   whatHappened: string;
   affectsWho: string;
   whatToDo: string[];
+  /** Shown as "Good to know" when whatToDo is empty (instead of a fake "Nothing to do"). */
+  goodToKnow?: string;
   whatItMeans: string;
+  /** "Ask about this": likely reader questions with short answers. */
+  faq?: FaqItem[];
   scam: ScamDetails | null;
   confidence: Confidence;
   /** Low confidence, or a single source reporting an unconfirmed claim. Shown as a "Developing" badge. */
@@ -89,5 +107,5 @@ export interface NewsItem {
   image?: ImageCandidate;
 }
 
-export const STORY_PROMPT_VERSION = 'stories-v2';
-export const FALLBACK_MODEL = 'techdaily-fallback-v2';
+export const STORY_PROMPT_VERSION = 'stories-v3';
+export const FALLBACK_MODEL = 'techdaily-fallback-v3';

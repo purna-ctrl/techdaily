@@ -43,6 +43,8 @@ jobs:
       - run: flutter --version
       - run: flutter pub get
       - run: flutter build web --release
+      # Content-hashed font names so phones never pair new code with a stale cached icon font.
+      - run: python3 tool/web/fingerprint_fonts.py build/web
 
       # Share the pristine build with the hourly news workflow (it renders into a copy).
       - uses: actions/cache/save@v4

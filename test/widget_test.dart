@@ -116,7 +116,7 @@ void main() {
     await scrollTo(tester, find.text('Fake parcel texts are tricking UPI users').first);
     await tester.tap(find.text('Fake parcel texts are tricking UPI users').first);
     await tester.pumpAndSettle();
-    for (final t in ['What happened', 'Does it affect me?', 'How the trick works', 'Warning signs', 'What to do if you’re targeted', 'What to do']) {
+    for (final t in ['IN ONE LINE', 'KEY NUMBERS', 'What’s the trick?', 'Am I at risk?', 'Spot the signs', 'Stay safe', 'If it happened to you', 'Why it matters', 'Ask about this']) {
       expect(find.text(t), findsWidgets, reason: t);
     }
     expect(find.byKey(const ValueKey('wa-demo-scam-1')), findsOneWidget);
@@ -161,7 +161,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('reels')), findsOneWidget);
     expect(find.text('SCAM ALERT'), findsOneWidget);
-    expect(find.text('What happened'), findsWidgets);
+    expect(find.text('What’s the trick?'), findsWidgets);
     expect(find.text('WhatsApp'), findsWidgets);
     await tester.fling(find.byKey(const ValueKey('reels')), const Offset(0, -500), 1500);
     await tester.pumpAndSettle();

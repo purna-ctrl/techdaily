@@ -5,6 +5,8 @@ import '../../models/story.dart';
 import '../../widgets/v3/jargon.dart';
 import '../../widgets/v3/story_cards.dart' show metaLine;
 import '../../widgets/v3/story_image.dart';
+import '../../core/constants/story_questions.dart';
+import '../../widgets/v3/story_questions.dart';
 import '../../widgets/v3/story_sections.dart';
 import '../../widgets/v3/ui.dart';
 
@@ -97,37 +99,9 @@ class _ReelState extends State<_Reel> {
   }
 
   List<(String, IconData, Widget, bool)> _sections(Story s, Color c) => [
-        ('What happened', Icons.newspaper_rounded, JargonText(s.whatHappened, accent: c), false),
-        ('Does it affect me?', Icons.person_search_rounded, JargonText(s.affectsWho, accent: c), false),
-        if (s.scam != null) ...[
-          ('How the trick works', Icons.phishing_rounded, JargonText(s.scam!.howItWorks, accent: TD.redTint), true),
-          (
-            'Warning signs',
-            Icons.warning_amber_rounded,
-            Column(children: [
-              for (final w in s.scam!.warningSigns)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Padding(padding: EdgeInsets.only(top: 2), child: Icon(Icons.warning_rounded, size: 17, color: TD.focus)),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(w)),
-                  ]),
-                ),
-            ]),
-            true
-          ),
-          (
-            'If you’re targeted',
-            Icons.health_and_safety_rounded,
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              TickChecklist(items: s.scam!.ifTargeted, color: TD.redTint, numbered: true),
-              const HelplineCallout(compact: true),
-            ]),
-            true
-          ),
-        ],
-        ('What to do', Icons.task_alt_rounded, TickChecklist(items: s.whatToDo, color: c), false),
+        if (s.display.tldr.isNotEmpty) (kTldrLabel, Icons.short_text_rounded, JargonText(s.display.tldr, accent: c), false),
+        for (final x in storySections(s, compact: true)) (x.title, x.icon, x.body, x.scam),
+        if (s.faq.isNotEmpty) (kAskLabel, Icons.forum_rounded, AskAboutThis(story: s, compact: true), false),
       ];
 
   @override

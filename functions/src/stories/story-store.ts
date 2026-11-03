@@ -42,6 +42,10 @@ export function storyToDoc(s: Story): Record<string, unknown> {
     sourceCount: s.sources.length,
     // Firestore rejects `undefined`; the image object never carries undefined keys (see images.ts).
     image: s.image ?? null,
+    tldr: s.tldr ?? '',
+    keyNumbers: s.keyNumbers ?? [],
+    goodToKnow: s.goodToKnow ?? '',
+    faq: s.faq ?? [],
     imageTries: s.imageTries ?? 0,
   };
 }
@@ -67,10 +71,20 @@ export function docToStory(d: Record<string, any>, id?: string): Story {
     publishedAt: toIso(d.publishedAt),
     updatedAt: toIso(d.updatedAt),
     sources,
+    tldr: String(d.tldr ?? ''),
+    keyNumbers: Array.isArray(d.keyNumbers)
+      ? d.keyNumbers
+          .filter((k: any) => k && typeof k === 'object' && k.value && k.label)
+          .map((k: any) => ({ value: String(k.value), label: String(k.label) }))
+      : [],
     whatHappened: String(d.whatHappened ?? ''),
     affectsWho: String(d.affectsWho ?? ''),
     whatToDo: Array.isArray(d.whatToDo) ? d.whatToDo.map(String) : [],
     whatItMeans: String(d.whatItMeans ?? ''),
+    goodToKnow: String(d.goodToKnow ?? ''),
+    faq: Array.isArray(d.faq)
+      ? d.faq.filter((f: any) => f && typeof f === 'object' && f.q && f.a).map((f: any) => ({ q: String(f.q), a: String(f.a) }))
+      : [],
     scam:
       d.scam && typeof d.scam === 'object'
         ? {
@@ -87,7 +101,7 @@ export function docToStory(d: Record<string, any>, id?: string): Story {
     enrichAttempts: Number.isFinite(d.enrichAttempts) ? Number(d.enrichAttempts) : 0,
     region: d.region === 'IN' ? 'IN' : 'GLOBAL',
     unconfirmed: d.unconfirmed === true,
-    promptVersion: String(d.promptVersion ?? STORY_PROMPT_VERSION),
+    promptVersion: String(d.promptVersion ?? 'stories-v1'),
     image: parseStoryImage(d.image),
     imageTries: Number.isFinite(d.imageTries) ? Number(d.imageTries) : 0,
   };
