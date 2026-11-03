@@ -41,8 +41,8 @@ class AppTheme {
   static const Color darkSurface = Color(0xFF15151B);
   static const Color darkSurfaceAlt = Color(0xFF1E1E26);
   static const Color darkInk = Color(0xFFF4F2EC);
-  static const Color darkInkMuted = Color(0xFFA09D96);
-  static const Color darkBorder = Color(0xFF2A2A33);
+  static const Color darkInkMuted = Color(0xFFB9B5AD); // 8.9:1 on surface
+  static const Color darkBorder = Color(0xFF2E2E38);
 
   // Legacy names kept so older widgets pick up the new accent automatically.
   static const Color cyberCyan = accentDark;
@@ -259,7 +259,7 @@ class AppTheme {
       splashFactory: InkSparkle.splashFactory,
     );
 
-    final shape12 = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+    final shape12 = RoundedRectangleBorder(borderRadius: BorderRadius.circular(16));
 
     return base.copyWith(
       appBarTheme: AppBarTheme(
@@ -277,7 +277,7 @@ class AppTheme {
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: border),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(22),
         ),
       ),
       dividerTheme: DividerThemeData(color: border, thickness: 1, space: 24),
@@ -373,8 +373,8 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: dark ? paper : ink,
-        contentTextStyle: b(14, FontWeight.w500, c: dark ? ink : paper),
+        backgroundColor: dark ? const Color(0xFF26262F) : ink,
+        contentTextStyle: b(14, FontWeight.w500, c: paper),
         actionTextColor: primary,
         shape: shape12,
       ),
@@ -395,7 +395,7 @@ class AppTheme {
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
       ),
       dialogTheme: DialogThemeData(

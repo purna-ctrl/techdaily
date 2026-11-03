@@ -357,7 +357,7 @@ describe('store conversion and cache', () => {
     expect(typeof doc.publishedAt.toDate).toBe('function');
     expect(doc.sourceCount).toBe(1);
     const back = docToStory(doc);
-    expect(back).toEqual(s);
+    expect(back).toEqual({ ...s, image: null, imageTries: 0 });
   });
 
   test('cache saves, loads and indexes URLs', () => {
@@ -422,7 +422,7 @@ ${items.map(([t, l, h, d]) => `<item><title><![CDATA[${t}]]></title><link>${l}</
   test('dry run: clusters, writes fallback cards, picks Today in 5, re-runs are idempotent', async () => {
     const cache = new StoryCache();
     const writer = new StoryWriter({ apiKey: '' });
-    const r = await runStoryPipeline({ dryRun: true, feeds, fetchText, now: NOW }, { cache, writer });
+    const r = await runStoryPipeline({ dryRun: true, feeds, fetchText, imageFetchBudget: 0, now: NOW }, { cache, writer });
     expect(r.feeds.every((f) => f.status === 'ok')).toBe(true);
     expect(r.itemsFetched).toBe(4);
     expect(r.storiesCreated).toBe(3);
@@ -440,17 +440,17 @@ ${items.map(([t, l, h, d]) => `<item><title><![CDATA[${t}]]></title><link>${l}</
     expect(rbi.region).toBe('IN');
     expect(r.today.items.length).toBe(3);
 
-    const again = await runStoryPipeline({ dryRun: true, feeds, fetchText, now: NOW + H }, { cache, writer });
+    const again = await runStoryPipeline({ dryRun: true, feeds, fetchText, imageFetchBudget: 0, now: NOW + H }, { cache, writer });
     expect(again.storiesCreated).toBe(0);
     expect(again.itemsNew).toBe(0);
   });
 
   test('re-enriches fallback stories with AI in a later run', async () => {
     const cache = new StoryCache();
-    await runStoryPipeline({ dryRun: true, feeds, fetchText, now: NOW }, { cache, writer: new StoryWriter({ apiKey: '' }) });
+    await runStoryPipeline({ dryRun: true, feeds, fetchText, imageFetchBudget: 0, now: NOW }, { cache, writer: new StoryWriter({ apiKey: '' }) });
     const aiJson = { ...goodAiJson, isScam: false, scam: null, category: 'money-fintech', headline: 'A simple AI headline here' };
     const fetchFn = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(aiJson) }] } }] }), text: async () => '' });
-    const r = await runStoryPipeline({ dryRun: true, feeds, fetchText, now: NOW + H }, { cache, writer: new StoryWriter({ apiKey: 'k', fetchFn: fetchFn as any }) });
+    const r = await runStoryPipeline({ dryRun: true, feeds, fetchText, imageFetchBudget: 0, now: NOW + H }, { cache, writer: new StoryWriter({ apiKey: 'k', fetchFn: fetchFn as any }) });
     expect(r.storiesEnriched).toBe(3);
     const s = cache.all()[0];
     expect(s.needsEnrichment).toBe(false);

@@ -21,8 +21,14 @@ class TechDailyWordmark extends StatelessWidget {
           height: size * 1.35,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppTheme.accent,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFFF5A1F), Color(0xFFFF3B4E), Color(0xFF8B5CF6)],
+              stops: [0, 0.55, 1],
+            ),
             borderRadius: BorderRadius.circular(size * 0.32),
+            boxShadow: [BoxShadow(color: AppTheme.accent.withValues(alpha: 0.35), blurRadius: size * 0.8)],
           ),
           child: Text(
             'TD',
@@ -30,7 +36,14 @@ class TechDailyWordmark extends StatelessWidget {
           ),
         ),
         SizedBox(width: size * 0.4),
-        Text('TechDaily', style: AppTheme.display(size, color: fg, height: 1)),
+        Text.rich(
+          TextSpan(children: [
+            const TextSpan(text: 'Tech'),
+            TextSpan(text: 'Daily', style: TextStyle(color: AppTheme.isDark(context) ? const Color(0xFFFF8255) : AppTheme.accent)),
+          ]),
+          semanticsLabel: 'TechDaily',
+          style: AppTheme.display(size, color: fg, height: 1),
+        ),
       ],
     );
   }

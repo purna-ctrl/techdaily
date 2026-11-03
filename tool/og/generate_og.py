@@ -3,12 +3,18 @@
 
 Run once from the repo root (needs Pillow):  python3 tool/og/generate_og.py
 The PNGs are committed; `flutter build web` copies them to build/web/og/.
-No publisher images are used anywhere: every preview is this generated category art.
+Used as og:image for category pages, and for stories that have no publisher image. Each card uses the
+category colour and the same gradient-mesh background as web/art/<category>.svg (tool/art/generate_art.py).
 """
 import math
 import os
 
+import sys
+
 from PIL import Image, ImageDraw, ImageFont
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'art'))
+from generate_art import BLOBS, COLORS  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "web", "og")
@@ -111,21 +117,44 @@ def wrap(d, text, f, max_w):
     return lines
 
 
-def make(cid, label):
+def rgb(hexstr):
+    h = hexstr.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def mesh(cid):
+    """Soft radial colour blobs on ink (same spec as the SVG art)."""
     img = Image.new("RGB", (W, H), INK)
+    base, sec, ter, _ = COLORS[cid]
+    cols = [rgb(base), rgb(sec), rgb(ter)]
+    grad = Image.radial_gradient("L")  # 256x256, 0 centre -> 255 edge
+    for cx, cy, r, k, a in BLOBS[cid]:
+        cy = cy * H / 675
+        size = int(r * 2)
+        mask = grad.resize((size, size)).point(lambda v, a=a: int(max(0, 255 - v * 1.42) * a))
+        img.paste(Image.new("RGB", (size, size), cols[k]), (int(cx - r), int(cy - r)), mask)
+    # left scrim so the label always reads (WCAG: paper text on <= #2x2x2x)
+    scrim = Image.linear_gradient("L").rotate(90).resize((W, H)).point(lambda v: int(min(255, v * 1.15)))
+    img = Image.composite(img, Image.new("RGB", (W, H), INK), scrim)
     d = ImageDraw.Draw(img)
-    # subtle grid
-    for x in range(0, W, 60):
-        d.line([(x, 0), (x, H)], fill=(17, 17, 23), width=1)
-    for y in range(0, H, 60):
-        d.line([(0, y), (W, y)], fill=(17, 17, 23), width=1)
+    for x in range(0, W, 24):
+        for y in range(0, H, 24):
+            d.point((x + 2, y + 2), fill=(40, 40, 48))
+    return img
+
+
+def make(cid, label):
+    global ACCENT
+    ACCENT = rgb(COLORS[cid][0])
+    img = mesh(cid)
+    d = ImageDraw.Draw(img)
     # glyph panel
-    d.ellipse([780, 135, 1140, 495], fill=SURFACE, outline=LINE, width=2)
+    d.ellipse([780, 135, 1140, 495], fill=SURFACE, outline=ACCENT, width=3)
     glyph(d, cid, 960, 315, 120)
     # wordmark
     wm = font("SpaceGrotesk-700.ttf", 48)
     d.text((72, 64), "Tech", font=wm, fill=PAPER)
-    d.text((72 + d.textlength("Tech", font=wm), 64), "Daily", font=wm, fill=ACCENT)
+    d.text((72 + d.textlength("Tech", font=wm), 64), "Daily", font=wm, fill=rgb(COLORS["top-stories"][0]))
     # category
     size = 104
     f = font("SpaceGrotesk-700.ttf", size)

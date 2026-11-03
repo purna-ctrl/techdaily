@@ -71,6 +71,41 @@ class ScamInfo {
       };
 }
 
+/// The publisher's lead image: hotlinked (never copied) and always shown
+/// with a visible "Image: sourceName" credit linking to [sourceUrl].
+class StoryImage {
+  final String url;
+  final String sourceName;
+  final String sourceUrl;
+  final int? width;
+  final int? height;
+
+  const StoryImage({required this.url, required this.sourceName, required this.sourceUrl, this.width, this.height});
+
+  /// Only https images with a credit are accepted (mixed content / unsafe
+  /// links are dropped and the category art is shown instead).
+  static StoryImage? fromMap(dynamic m) {
+    if (m is! Map) return null;
+    final url = (m['url'] ?? '').toString();
+    final sourceUrl = (m['sourceUrl'] ?? '').toString();
+    final sourceName = (m['sourceName'] ?? '').toString();
+    final u = Uri.tryParse(url);
+    final su = Uri.tryParse(sourceUrl);
+    if (u == null || u.scheme != 'https' || u.host.isEmpty) return null;
+    if (su == null || !(su.scheme == 'https' || su.scheme == 'http') || sourceName.isEmpty) return null;
+    int? n(dynamic v) => v is num && v > 0 ? v.toInt() : null;
+    return StoryImage(url: url, sourceName: sourceName, sourceUrl: sourceUrl, width: n(m['width']), height: n(m['height']));
+  }
+
+  Map<String, dynamic> toMap() => {
+        'url': url,
+        'sourceName': sourceName,
+        'sourceUrl': sourceUrl,
+        if (width != null) 'width': width,
+        if (height != null) 'height': height,
+      };
+}
+
 /// One news event in simple words, backed by one or more original reports.
 class Story {
   final String id;
@@ -89,6 +124,7 @@ class Story {
   final bool developing;
   final String aiModel;
   final String region;
+  final StoryImage? image;
 
   const Story({
     required this.id,
@@ -107,6 +143,7 @@ class Story {
     this.developing = false,
     this.aiModel = '',
     this.region = 'GLOBAL',
+    this.image,
   });
 
   factory Story.fromMap(Map<String, dynamic> m, {String? docId}) {
@@ -133,6 +170,7 @@ class Story {
       developing: m['developing'] == true,
       aiModel: (m['aiModel'] ?? '').toString(),
       region: m['region'] == 'IN' ? 'IN' : 'GLOBAL',
+      image: StoryImage.fromMap(m['image']),
     );
   }
 
@@ -153,6 +191,7 @@ class Story {
         'developing': developing,
         'aiModel': aiModel,
         'region': region,
+        'image': image?.toMap(),
       };
 
   bool get isValid => id.isNotEmpty && slug.isNotEmpty && headline.isNotEmpty;
@@ -169,6 +208,8 @@ class Story {
   String get webUrl => '$kSiteUrl/story/${Uri.encodeComponent(slug)}/';
 
   bool get isFallback => aiModel.startsWith('techdaily-fallback');
+
+  bool get isScam => scam != null;
 
   /// Same formula as the backend ranking (recency x coverage x confidence).
   double score(DateTime now) {

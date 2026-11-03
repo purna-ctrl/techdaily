@@ -16,6 +16,7 @@ import { StoryCache, writeStories, writeTodayInFive } from './story-store';
 import { fallbackStory, StoryWriter, WriterInput, WriterSource, WrittenStory, WriterStats } from './story-writer';
 import { sha, storyIdFor, storySlug } from './text';
 import { NewsItem, Story, StorySource } from './types';
+import { ImageCandidate, ImageResolveStats, pickBestImage, resolveMissingImages, storedImageScore, imageScore, SourcedCandidate } from './images';
 
 type Db = FirebaseFirestore.Firestore;
 const HOUR = 3600 * 1000;
@@ -45,6 +46,31 @@ export interface StoryIngestOptions {
   now?: number;
   feeds?: StoryFeed[];
   push?: Pick<PushService, 'sendToTopic'>;
+  /** Max article-page og:image fetches this run (new stories first, then backfill). Default 60. */
+  imageFetchBudget?: number;
+  /** Override for tests: returns the og:image of a page. */
+  fetchOgImage?: (url: string) => Promise<ImageCandidate | undefined>;
+}
+
+export interface SourceImageStat {
+  /** Feed items kept this run. */
+  items: number;
+  /** ...of which the feed itself declared a usable image. */
+  feedImages: number;
+  /** Stories (changed this run) whose lead source is this feed. */
+  stories: number;
+  /** ...of which have an image after the og:image step. */
+  storiesWithImage: number;
+}
+
+export interface ImageReport extends ImageResolveStats {
+  perSource: Record<string, SourceImageStat>;
+  /** Stories changed this run / with an image. */
+  storiesChanged: number;
+  storiesChangedWithImage: number;
+  /** All known stories (cache + new) / with an image. */
+  storiesTotal: number;
+  storiesTotalWithImage: number;
 }
 
 export interface StoryIngestResult {
@@ -63,6 +89,7 @@ export interface StoryIngestResult {
   changed: Story[];
   today: TodayInFive;
   pushes: number;
+  images: ImageReport;
 }
 
 const UA = 'Mozilla/5.0 (compatible; TechDailyBot/2.0; +https://techdaily-prod.web.app)';
@@ -120,6 +147,7 @@ export function itemsFromFeed(feed: StoryFeed, xml: string, now: number, maxAgeH
       region: feed.region === 'IN' ? 'IN' : 'GLOBAL',
       official: Boolean(feed.official),
       defaultCategory: feed.category,
+      ...(r.image ? { image: r.image } : {}),
     });
   }
   out.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
@@ -191,6 +219,25 @@ export function categoryHintFor(items: NewsItem[]): CategoryId {
   return classify(items.map((i) => i.title).join(' · '), items.map((i) => i.snippet).join(' '), def).category;
 }
 
+function sourced(i: NewsItem): SourcedCandidate | null {
+  return i.image ? { candidate: i.image, sourceName: i.sourceName, sourceUrl: i.url } : null;
+}
+
+/** Best feed image across a cluster's items (earliest source wins ties). */
+export function bestItemImage(items: NewsItem[]) {
+  const sorted = [...items].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+  return pickBestImage(sorted.map(sourced));
+}
+
+/** Keeps the story's image unless a new source brings a clearly better one. */
+export function mergeImage(s: Story, items: NewsItem[]): Story['image'] {
+  const fresh = bestItemImage(items);
+  if (!s.image) return fresh;
+  if (!fresh) return s.image;
+  const freshCand = items.find((i) => i.image?.url === fresh.url)?.image;
+  return freshCand && imageScore(freshCand) > storedImageScore(s.image) * 1.25 ? fresh : s.image;
+}
+
 /** Applies written text to a story (keeps id, slug, sources). */
 export function applyWritten(base: Story, w: WrittenStory, nowIso: string): Story {
   const s: Story = {
@@ -241,6 +288,8 @@ export function newStory(items: NewsItem[], w: WrittenStory, nowIso: string, tak
     region: items.some((i) => i.region === 'IN') ? 'IN' : 'GLOBAL',
     unconfirmed: false,
     promptVersion: w.promptVersion,
+    image: bestItemImage(items),
+    imageTries: 0,
   };
   return applyWritten(base, w, nowIso);
 }
@@ -307,7 +356,7 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
   for (const c of clusters.filter((c) => c.storyId)) {
     const s = cache.stories.get(c.storyId!);
     if (!s) continue;
-    const merged: Story = { ...s, sources: [...s.sources, ...c.items.map(toSource)], updatedAt: nowIso };
+    const merged: Story = { ...s, sources: [...s.sources, ...c.items.map(toSource)], updatedAt: nowIso, image: mergeImage(s, c.items) };
     merged.region = merged.region === 'IN' || c.items.some((i) => i.region === 'IN') ? 'IN' : 'GLOBAL';
     if (merged.confidence === 'medium' && outlets(merged) >= 3) merged.confidence = 'high';
     merged.developing = isDeveloping(merged);
@@ -395,7 +444,19 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
     changed.set(next.id, next);
   }
 
-  // 6. Save
+  // 6. Images: one og:image page fetch per story still without an image (new/changed first,
+  //    then backfill of older stories), capped per run. Dry runs fetch too (read-only) for coverage.
+  const imgRun = await resolveMissingImages([...changed.values()], cache.all(), {
+    budget: opts.imageFetchBudget ?? 60,
+    nowIso,
+    fetchOg: opts.fetchOgImage,
+  });
+  for (const s of imgRun.updated) {
+    cache.upsert(s);
+    changed.set(s.id, s);
+  }
+
+  // 7. Save
   const today = pickTodayInFive(cache.all(), now);
   let writes = 0;
   const changedList = [...changed.values()];
@@ -415,9 +476,35 @@ export async function runStoryPipeline(opts: StoryIngestOptions, deps: PipelineD
     writes += 2;
   }
 
+  // Image coverage report
+  const perSource: Record<string, SourceImageStat> = {};
+  const stat = (id: string) => (perSource[id] ??= { items: 0, feedImages: 0, stories: 0, storiesWithImage: 0 });
+  for (const i of items) {
+    const st = stat(i.sourceId);
+    st.items++;
+    if (i.image) st.feedImages++;
+  }
+  for (const s of changedList) {
+    const lead = s.sources[0];
+    if (!lead) continue;
+    const st = stat(lead.sourceId || lead.name);
+    st.stories++;
+    if (s.image) st.storiesWithImage++;
+  }
+  const allStories = cache.all();
+  const images: ImageReport = {
+    ...imgRun.stats,
+    perSource,
+    storiesChanged: changedList.length,
+    storiesChangedWithImage: changedList.filter((s) => s.image).length,
+    storiesTotal: allStories.length,
+    storiesTotalWithImage: allStories.filter((s) => s.image).length,
+  };
+
   return {
     startedAt,
     completedAt: new Date().toISOString(),
+    images,
     feeds: stats,
     itemsFetched: items.length,
     itemsNew: fresh.length,

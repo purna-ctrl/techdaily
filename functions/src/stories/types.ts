@@ -6,6 +6,9 @@
  * converts them to Firestore Timestamps on write.
  */
 import type { CategoryId } from './categories';
+import type { ImageCandidate, StoryImage } from './images';
+
+export type { StoryImage } from './images';
 
 export type Confidence = 'high' | 'medium' | 'low';
 
@@ -58,6 +61,13 @@ export interface Story {
   /** The AI flagged the report as unconfirmed (leak / rumour / "reportedly"). */
   unconfirmed: boolean;
   promptVersion: string;
+  /**
+   * The publisher's lead image (hotlinked URL + credit), best across the story's sources. Null when
+   * none was found yet; the app and static pages then show generated category art.
+   */
+  image?: StoryImage | null;
+  /** og:image page fetches tried so far for a story without an image (capped, see images.ts). */
+  imageTries?: number;
 }
 
 /** One feed item after fetching + normalisation, before clustering. */
@@ -75,6 +85,8 @@ export interface NewsItem {
   official: boolean;
   /** The feed's default category for this source. */
   defaultCategory: CategoryId;
+  /** Image declared in the feed item (media:content / thumbnail / enclosure / first <img>). */
+  image?: ImageCandidate;
 }
 
 export const STORY_PROMPT_VERSION = 'stories-v1';

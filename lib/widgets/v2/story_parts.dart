@@ -9,8 +9,10 @@ import '../../core/utils/date_utils.dart';
 import '../../models/story.dart';
 import '../../services/v2/newsletter_service.dart';
 import '../../services/v2/story_share.dart';
+import '../v3/category_art.dart';
+import '../v3/story_cards.dart';
 
-/// Generated category artwork (no publisher images are ever shown).
+/// Generated category artwork block (fallback art; see widgets/v3/category_art.dart).
 class CategoryArt extends StatelessWidget {
   final String categoryId;
   final double height;
@@ -18,38 +20,11 @@ class CategoryArt extends StatelessWidget {
   const CategoryArt({super.key, required this.categoryId, this.height = 96, this.radius = 14});
 
   @override
-  Widget build(BuildContext context) {
-    final cat = categoryId == kTopStories.id ? kTopStories : storyCategoryById(categoryId);
-    return ExcludeSemantics(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [const Color(0xFF15151B), Color.lerp(const Color(0xFF15151B), cat.color, 0.28)!],
-            ),
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                right: -height * 0.15,
-                bottom: -height * 0.2,
-                child: Icon(cat.icon, size: height * 1.15, color: cat.color.withValues(alpha: 0.22)),
-              ),
-              Positioned(
-                left: 16,
-                bottom: 14,
-                child: Icon(cat.icon, size: height * 0.32, color: cat.color),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SizedBox(
+        height: height,
+        width: double.infinity,
+        child: CategoryArtwork(categoryId: categoryId, borderRadius: BorderRadius.circular(radius)),
+      );
 }
 
 class CategoryLabel extends StatelessWidget {
@@ -179,7 +154,7 @@ class NumberedList extends StatelessWidget {
 Future<void> openExternal(BuildContext context, String url) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
   final uri = Uri.tryParse(url);
-  if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http')) return;
+  if (uri == null || !const {'https', 'http', 'tel', 'mailto'}.contains(uri.scheme)) return;
   try {
     if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
   } catch (_) {}
@@ -285,90 +260,13 @@ class StoryActions extends StatelessWidget {
   }
 }
 
-/// Feed card: every field of the TechDaily story card.
+/// Feed/list card (search, saved): compact image card.
 class StoryCard extends StatelessWidget {
   final Story story;
   const StoryCard({super.key, required this.story});
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => openStory(context, story),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            StoryMeta(story: story),
-            const SizedBox(height: 8),
-            Semantics(
-              header: true,
-              child: Text(story.headline, style: AppTheme.display(20, color: theme.colorScheme.onSurface, height: 1.2)),
-            ),
-            SectionBlock(title: 'What happened', child: Text(story.whatHappened)),
-            SectionBlock(title: 'Does it affect me?', child: Text(story.affectsWho)),
-            SectionBlock(title: 'What to do', child: NumberedList(items: story.whatToDo)),
-            SectionBlock(title: 'What this means for you', highlight: true, child: Text(story.whatItMeans)),
-            const SizedBox(height: 10),
-            SourceLinks(story: story),
-            const SizedBox(height: 6),
-            StoryActions(story: story),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-/// "Today in 5 stories".
-class TodayInFiveCard extends StatelessWidget {
-  final List<TodayItem> items;
-  const TodayInFiveCard({super.key, required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
-    final accent = AppTheme.accentOf(context);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent.withValues(alpha: 0.6)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(Icons.wb_sunny_rounded, color: accent, size: 20),
-          const SizedBox(width: 8),
-          Semantics(header: true, child: Text('Today in ${items.length} stories', style: AppTheme.display(19, color: theme.colorScheme.onSurface))),
-        ]),
-        const SizedBox(height: 4),
-        for (var i = 0; i < items.length; i++)
-          InkWell(
-            onTap: () => openStorySlug(context, items[i].slug),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 9),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                SizedBox(width: 26, child: Text('${i + 1}', style: AppTheme.numeric(20, color: accent, family: AppTheme.displayFont))),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(items[i].headline, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15.5, height: 1.3)),
-                    const SizedBox(height: 2),
-                    Text(storyCategoryById(items[i].category).label,
-                        style: TextStyle(fontSize: 12.5, color: AppTheme.mutedOf(context))),
-                  ]),
-                ),
-              ]),
-            ),
-          ),
-      ]),
-    );
-  }
+  Widget build(BuildContext context) => CompactStoryCard(story: story);
 }
 
 /// Newsletter sign-up form (Settings + footer of story pages).

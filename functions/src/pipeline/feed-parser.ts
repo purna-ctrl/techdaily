@@ -1,6 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import { decode } from 'html-entities';
 import { ImageExtractor } from './image-extractor';
+import { feedImageCandidate, ImageCandidate } from '../stories/images';
 
 export interface RawFeedItem {
   title?: string;
@@ -9,6 +10,8 @@ export interface RawFeedItem {
   description?: string;
   pubDate?: string;
   imageUrl?: string;
+  /** Best usable image of the item with its declared size (v2 stories). */
+  image?: ImageCandidate;
 }
 
 export class FeedParser {
@@ -112,6 +115,7 @@ export class FeedParser {
       description,
       pubDate,
       imageUrl: ImageExtractor.fromFeedItem(item, link || undefined),
+      image: feedImageCandidate(item, link || undefined),
     };
   }
 
@@ -145,6 +149,7 @@ export class FeedParser {
       description,
       pubDate,
       imageUrl: ImageExtractor.fromFeedItem(entry, link || undefined),
+      image: feedImageCandidate(entry, link || undefined),
     };
   }
 }

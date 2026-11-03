@@ -28,7 +28,9 @@ import 'screens/v2/story_detail_screen.dart';
 import 'screens/v2/story_search_screen.dart';
 import 'services/firebase_auth_service.dart';
 import 'services/local_article_service.dart';
+import 'services/v2/daily_streak.dart';
 import 'services/v2/newsletter_service.dart';
+import 'services/v2/scam_game.dart';
 import 'services/v2/sample_stories.dart';
 import 'services/v2/saved_stories.dart';
 import 'services/v2/topic_prefs.dart';
@@ -153,6 +155,8 @@ class _TechDailyAppState extends State<TechDailyApp> {
   late final SavedStoriesController _saved = widget.saved ?? SavedStoriesController();
   late final TopicPrefs _topics = widget.topics ?? TopicPrefs();
   late final NewsletterService _newsletter = widget.newsletter ?? LocalNewsletterService();
+  final ScamGameController _scamGame = ScamGameController();
+  final CaughtUpStreak _caughtUp = CaughtUpStreak();
   late final ArticleRepository _legacy = widget.legacyArticles ?? LocalArticleRepository(articleService: LocalArticleService());
   StreamSubscription<dynamic>? _authSub;
 
@@ -160,6 +164,8 @@ class _TechDailyAppState extends State<TechDailyApp> {
   void initState() {
     super.initState();
     if (widget.topics == null) unawaited(_topics.load());
+    unawaited(_scamGame.load());
+    unawaited(_caughtUp.load());
     unawaited(_saved.bind(widget.authRepository.currentUser?.uid));
     _authSub = widget.authRepository.authStateChanges.listen((u) => _saved.bind(u?.uid));
   }
@@ -168,6 +174,8 @@ class _TechDailyAppState extends State<TechDailyApp> {
   void dispose() {
     _authSub?.cancel();
     _themeModeNotifier.dispose();
+    _scamGame.dispose();
+    _caughtUp.dispose();
     super.dispose();
   }
 
@@ -230,6 +238,8 @@ class _TechDailyAppState extends State<TechDailyApp> {
       topics: _topics,
       newsletter: _newsletter,
       auth: widget.authRepository,
+      scamGame: _scamGame,
+      caughtUp: _caughtUp,
       child: AppScope(
         repository: _legacy,
         authRepository: widget.authRepository,

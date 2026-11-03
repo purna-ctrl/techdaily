@@ -11,6 +11,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { toCategoryId } from './categories';
 import { Confidence, Story, StorySource, STORY_PROMPT_VERSION } from './types';
 import { TodayInFive } from './ranking';
+import { parseStoryImage } from './images';
 
 export const STORIES = 'stories';
 export const STORY_BRIEFS = 'storyBriefs';
@@ -39,6 +40,9 @@ export function storyToDoc(s: Story): Record<string, unknown> {
     updatedAt: ts(s.updatedAt),
     sources: s.sources.map((x) => ({ ...x, publishedAt: ts(x.publishedAt) })),
     sourceCount: s.sources.length,
+    // Firestore rejects `undefined`; the image object never carries undefined keys (see images.ts).
+    image: s.image ?? null,
+    imageTries: s.imageTries ?? 0,
   };
 }
 
@@ -84,6 +88,8 @@ export function docToStory(d: Record<string, any>, id?: string): Story {
     region: d.region === 'IN' ? 'IN' : 'GLOBAL',
     unconfirmed: d.unconfirmed === true,
     promptVersion: String(d.promptVersion ?? STORY_PROMPT_VERSION),
+    image: parseStoryImage(d.image),
+    imageTries: Number.isFinite(d.imageTries) ? Number(d.imageTries) : 0,
   };
 }
 

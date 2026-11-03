@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true">
+<defs>
+<radialGradient id="b0"><stop offset="0" stop-color="#FF3B4E" stop-opacity="0.55"/><stop offset="1" stop-color="#FF3B4E" stop-opacity="0"/></radialGradient>
+<radialGradient id="b1"><stop offset="0" stop-color="#7C1D3F" stop-opacity="0.7"/><stop offset="1" stop-color="#7C1D3F" stop-opacity="0"/></radialGradient>
+<radialGradient id="b2"><stop offset="0" stop-color="#FF9F1C" stop-opacity="0.35"/><stop offset="1" stop-color="#FF9F1C" stop-opacity="0"/></radialGradient>
+<pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.4" fill="#FFFFFF" fill-opacity=".07"/></pattern>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0B0B0F"/><stop offset="1" stop-color="#37141A"/></linearGradient>
+</defs>
+<rect width="1200" height="675" fill="url(#bg)"/>
+<circle cx="880" cy="320" r="520" fill="url(#b0)"/>
+<circle cx="230" cy="620" r="420" fill="url(#b1)"/>
+<circle cx="1150" cy="40" r="300" fill="url(#b2)"/>
+<rect width="1200" height="675" fill="url(#dots)"/>
+<circle cx="820" cy="340" r="70" fill="none" stroke="#FF7683" stroke-opacity="0.55" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="820" cy="340" r="140" fill="none" stroke="#FF7683" stroke-opacity="0.45000000000000007" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="820" cy="340" r="210" fill="none" stroke="#FF7683" stroke-opacity="0.35000000000000003" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="820" cy="340" r="280" fill="none" stroke="#FF7683" stroke-opacity="0.25" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="820" y1="340" x2="1018.9" y2="172.5" fill="none" stroke="#FF7683" stroke-opacity="0.8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="820,340 1034.2,159.6 934.4,84.4" fill="#FF3B4E" fill-opacity="0.25"/>
+<circle cx="940" cy="190" r="12" fill="#FFFFFF" fill-opacity="0.85"/>
+<circle cx="650" cy="400" r="9" fill="#FFFFFF" fill-opacity="0.85"/>
+<circle cx="880" cy="530" r="10" fill="#FFFFFF" fill-opacity="0.85"/>
+<polygon points="330,180 410,320 250,320" fill="none" stroke="#FF7683" stroke-opacity="0.5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="330" y1="228" x2="330" y2="272" fill="none" stroke="#FF7683" stroke-opacity="0.6" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="330" cy="296" r="6" fill="#FF7683" fill-opacity="0.6"/>
+</svg>

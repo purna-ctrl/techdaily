@@ -4,102 +4,174 @@ import '../../core/stories_scope.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/story.dart';
 import '../../widgets/story_widgets.dart' show FriendlyState;
+import '../../services/v2/story_share.dart';
 import '../../widgets/v2/story_parts.dart';
+import '../../widgets/v3/jargon.dart';
+import '../../widgets/v3/story_image.dart';
+import '../../widgets/v3/story_sections.dart';
+import '../../widgets/v3/ui.dart';
+import '../../core/constants/jargon.dart';
 
-/// Full story: card sections, scam template, sources, share/save, newsletter.
+/// Full story, image-led: parallax hero with credit, card sections with
+/// tap-to-explain jargon, animated "What to do" checklist, the scam template,
+/// sources, newsletter, and the action bar (WhatsApp first · Save · Listen ·
+/// Sources).
 class StoryDetailScreen extends StatelessWidget {
   final Story story;
   const StoryDetailScreen({super.key, required this.story});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final s = story;
+    final cat = s.categoryInfo;
+    final pad = MediaQuery.paddingOf(context);
+    final words = jargonIn([s.whatHappened, s.affectsWho, s.whatItMeans, ...s.whatToDo, if (s.scam != null) s.scam!.howItWorks]);
+    Widget constrained(Widget child) => Center(
+          child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: child)),
+        );
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: 'Back',
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () {
-            final nav = Navigator.of(context);
-            nav.canPop() ? nav.pop() : nav.pushReplacementNamed('/');
-          },
+      backgroundColor: TD.bg,
+      body: Stack(children: [
+        // Category glow behind the page
+        Positioned(
+          top: -120,
+          right: -80,
+          child: IgnorePointer(
+            child: Container(
+              width: 340,
+              height: 340,
+              decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [cat.color.withValues(alpha: 0.22), Colors.transparent])),
+            ),
+          ),
         ),
-        title: Text(storyCategoryLabel(s), style: AppTheme.display(17, color: theme.colorScheme.onSurface)),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(0, 8, 0, 40),
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  CategoryArt(categoryId: s.category, height: 84),
-                  const SizedBox(height: 14),
-                  StoryMeta(story: s, absoluteTime: true),
-                  const SizedBox(height: 8),
-                  Semantics(
-                    header: true,
-                    child: Text(s.headline, style: AppTheme.display(27, color: theme.colorScheme.onSurface, height: 1.15)),
-                  ),
-                  const SizedBox(height: 4),
-                  SectionBlock(title: 'What happened', child: Text(s.whatHappened)),
-                  SectionBlock(title: 'Does it affect me?', child: Text(s.affectsWho)),
-                  if (s.scam != null) ...[
-                    SectionBlock(title: 'How the trick works', warning: true, child: Text(s.scam!.howItWorks)),
-                    SectionBlock(title: 'Warning signs', warning: true, child: NumberedList(items: s.scam!.warningSigns, bullets: true)),
-                    SectionBlock(
-                      title: 'What to do if you’re targeted',
-                      warning: true,
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        NumberedList(items: s.scam!.ifTargeted),
-                        const SizedBox(height: 8),
-                        Text('India: call the cyber-crime helpline 1930 or report at cybercrime.gov.in.',
-                            style: TextStyle(fontSize: 13.5, color: AppTheme.mutedOf(context))),
-                        Wrap(spacing: 8, children: [
-                          TextButton(
-                            onPressed: () => openExternal(context, 'https://cybercrime.gov.in'),
-                            child: const Text('cybercrime.gov.in'),
-                          ),
-                          if (s.scam!.advisoryUrl != null)
-                            OutlinedButton.icon(
-                              onPressed: () => openExternal(context, s.scam!.advisoryUrl!),
-                              icon: const Icon(Icons.verified_user_rounded, size: 18),
-                              label: const Text('Official advisory'),
+        CustomScrollView(slivers: [
+          SliverAppBar(
+            pinned: true,
+            stretch: true,
+            expandedHeight: 470,
+            backgroundColor: TD.bg,
+            leading: Padding(
+              padding: const EdgeInsets.all(6),
+              child: IconButton(
+                tooltip: 'Back',
+                style: IconButton.styleFrom(backgroundColor: const Color(0x990B0B0F)),
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                onPressed: () {
+                  final nav = Navigator.of(context);
+                  nav.canPop() ? nav.pop() : nav.pushReplacementNamed('/');
+                },
+              ),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  tooltip: 'Copy link',
+                  style: IconButton.styleFrom(backgroundColor: const Color(0x990B0B0F)),
+                  onPressed: () => const StoryShare().copyLink(context, s),
+                  icon: const Icon(Icons.link_rounded, color: Colors.white),
+                ),
+              ),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              collapseMode: CollapseMode.parallax,
+              stretchModes: const [StretchMode.zoomBackground],
+              background: Stack(fit: StackFit.expand, children: [
+                ScrimmedImage(story: s, showCredit: false),
+                if (s.image != null) Positioned(top: pad.top + 64, right: 12, child: ImageCredit(story: s)),
+                Positioned(
+                  left: 18,
+                  right: 18,
+                  bottom: 18,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 728),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        Wrap(spacing: 8, runSpacing: 6, children: [
+                          CategoryChip(category: cat, glow: true),
+                          if (s.developing) const DevelopingPill(),
+                          if (s.isScam)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(color: TD.red, borderRadius: BorderRadius.circular(999)),
+                              child: Text('SCAM ALERT', style: AppTheme.kicker(size: 11, color: TD.bg).copyWith(fontWeight: FontWeight.w900)),
                             ),
                         ]),
+                        const SizedBox(height: 10),
+                        Semantics(
+                          header: true,
+                          child: Text(s.headline,
+                              maxLines: 6, overflow: TextOverflow.ellipsis, style: AppTheme.display(30, color: Colors.white, height: 1.1)),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${istTime(s.publishedAt)} · ${s.sourceNames.length > 1 ? '${s.sourceNames.length} sources: ' : ''}${s.sourceNames.join(', ')}',
+                          style: const TextStyle(fontSize: 13, color: Color(0xFFD2CEC6), height: 1.35),
+                        ),
                       ]),
                     ),
-                  ],
-                  SectionBlock(title: 'What to do', child: NumberedList(items: s.whatToDo)),
-                  SectionBlock(title: 'What this means for you', highlight: true, child: Text(s.whatItMeans)),
-                  SectionBlock(
-                    title: s.sources.length > 1 ? 'Read the originals' : 'Read the original',
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      SourceLinks(story: s, detailed: true),
-                      const SizedBox(height: 6),
-                      Text(
-                        s.isFallback
-                            ? 'Short version written automatically from the report headline. An AI-written simple version will follow.'
-                            : 'Written in simple words by AI from the reports above. Always check the original before acting on money or security advice.',
-                        style: TextStyle(fontSize: 12.5, color: AppTheme.mutedOf(context)),
-                      ),
-                    ]),
                   ),
-                  const SizedBox(height: 14),
-                  Text('Share this story', style: AppTheme.display(16, color: theme.colorScheme.onSurface)),
-                  const SizedBox(height: 8),
-                  StoryActions(story: s),
-                  const SizedBox(height: 22),
-                  const NewsletterSignup(source: 'app-story'),
+                ),
+              ]),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: constrained(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const SizedBox(height: 4),
+              FadeSlideIn(
+                child: SectionCard(title: 'What happened', icon: Icons.newspaper_rounded, color: cat.color, child: JargonText(s.whatHappened, accent: cat.tint)),
+              ),
+              FadeSlideIn(
+                index: 1,
+                child: SectionCard(title: 'Does it affect me?', icon: Icons.person_search_rounded, color: cat.color, child: JargonText(s.affectsWho, accent: cat.tint)),
+              ),
+              if (s.scam != null) ScamSections(scam: s.scam!),
+              SectionCard(title: 'What to do', icon: Icons.task_alt_rounded, color: cat.color, child: TickChecklist(items: s.whatToDo, color: cat.tint)),
+              SectionCard(
+                title: 'What this means for you',
+                icon: Icons.lightbulb_rounded,
+                color: cat.color,
+                highlight: true,
+                child: JargonText(s.whatItMeans, accent: cat.tint, style: const TextStyle(fontSize: 17.5, height: 1.5)),
+              ),
+              if (words.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                JargonChips(entries: words, accent: cat.tint),
+              ],
+              SectionCard(
+                title: s.sources.length > 1 ? 'Read the originals' : 'Read the original',
+                icon: Icons.link_rounded,
+                color: cat.color,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SourceLinks(story: s, detailed: true),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${s.isFallback ? 'Short version written automatically from the report headline. An AI-written simple version will follow.' : 'Written in simple words by AI from the reports above. Always check the original before acting on money or security advice.'}${s.image != null ? ' Image: ${s.image!.sourceName}, linked from the original report.' : ''}',
+                    style: const TextStyle(fontSize: 12.5, color: TD.muted, height: 1.45),
+                  ),
                 ]),
+              ),
+              const SizedBox(height: 22),
+              const NewsletterSignup(source: 'app-story'),
+              const SizedBox(height: 120),
+            ])),
+          ),
+        ]),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: SafeArea(
+            top: false,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 10), child: StoryActionBar(story: s)),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 

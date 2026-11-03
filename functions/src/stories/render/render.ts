@@ -64,6 +64,15 @@ export function publicStory(s: Story) {
     developing: s.developing,
     aiModel: s.aiModel,
     region: s.region,
+    image: s.image
+      ? {
+          url: s.image.url,
+          sourceName: s.image.sourceName,
+          sourceUrl: s.image.sourceUrl,
+          ...(s.image.width ? { width: s.image.width } : {}),
+          ...(s.image.height ? { height: s.image.height } : {}),
+        }
+      : null,
   };
 }
 

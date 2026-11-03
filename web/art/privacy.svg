@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true">
+<defs>
+<radialGradient id="b0"><stop offset="0" stop-color="#14B8A6" stop-opacity="0.5"/><stop offset="1" stop-color="#14B8A6" stop-opacity="0"/></radialGradient>
+<radialGradient id="b1"><stop offset="0" stop-color="#3B82F6" stop-opacity="0.4"/><stop offset="1" stop-color="#3B82F6" stop-opacity="0"/></radialGradient>
+<radialGradient id="b2"><stop offset="0" stop-color="#0EA5E9" stop-opacity="0.4"/><stop offset="1" stop-color="#0EA5E9" stop-opacity="0"/></radialGradient>
+<pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.4" fill="#FFFFFF" fill-opacity=".07"/></pattern>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0B0B0F"/><stop offset="1" stop-color="#0D2A2A"/></linearGradient>
+</defs>
+<rect width="1200" height="675" fill="url(#bg)"/>
+<circle cx="840" cy="320" r="520" fill="url(#b0)"/>
+<circle cx="220" cy="120" r="360" fill="url(#b1)"/>
+<circle cx="1080" cy="660" r="340" fill="url(#b2)"/>
+<rect width="1200" height="675" fill="url(#dots)"/>
+<path d="M755 290 A105 105 0 0 1 965 290" fill="none" stroke="#5EEAD4" stroke-opacity="0.75" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="755" y1="290" x2="755" y2="350" fill="none" stroke="#5EEAD4" stroke-opacity="0.75" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="965" y1="290" x2="965" y2="350" fill="none" stroke="#5EEAD4" stroke-opacity="0.75" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="690" y="340" width="340" height="250" rx="36" fill="#14B8A6" fill-opacity="0.85"/>
+<circle cx="860" cy="435" r="30" fill="#FFFFFF" fill-opacity="0.95"/>
+<rect x="848" y="445" width="24" height="70" rx="8" fill="#FFFFFF" fill-opacity="0.95"/>
+<rect x="110" y="290" width="380" height="96" rx="48" fill="none" stroke="#5EEAD4" stroke-opacity="0.55" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="170" cy="338" r="13" fill="#FFFFFF" fill-opacity="0.85"/>
+<circle cx="222" cy="338" r="13" fill="#FFFFFF" fill-opacity="0.77"/>
+<circle cx="274" cy="338" r="13" fill="#FFFFFF" fill-opacity="0.69"/>
+<circle cx="326" cy="338" r="13" fill="#FFFFFF" fill-opacity="0.61"/>
+<circle cx="378" cy="338" r="13" fill="#FFFFFF" fill-opacity="0.53"/>
+<circle cx="430" cy="338" r="13" fill="#FFFFFF" fill-opacity="0.44999999999999996"/>
+</svg>

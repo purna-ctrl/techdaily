@@ -124,7 +124,7 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
   WhatsApp/Telegram/X share, "Open in app", newsletter form), `/c/<category>/`, `/sitemap.xml`, `/rss.xml`,
   `/robots.txt`, `/data/feed.json` (what the app reads), and a "Today in 5" + latest block in `/index.html`.
   Hosting serves these files before the `** → /index.html` rewrite. OG images are per category
-  (`web/og/*.png`, generated once by `tool/og/generate_og.py`); publisher images are never copied.
+  (`web/og/*.png`, generated once by `tool/og/generate_og.py`); story photos are publisher images hotlinked (never copied) with a visible credit link; category art in `web/art/` is the fallback. `ingest --image-fetches=N` caps og:image lookups per run.
 
 ### Free-tier budget (why it is built this way)
 

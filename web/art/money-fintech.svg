@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true">
+<defs>
+<radialGradient id="b0"><stop offset="0" stop-color="#EAB308" stop-opacity="0.5"/><stop offset="1" stop-color="#EAB308" stop-opacity="0"/></radialGradient>
+<radialGradient id="b1"><stop offset="0" stop-color="#F97316" stop-opacity="0.4"/><stop offset="1" stop-color="#F97316" stop-opacity="0"/></radialGradient>
+<radialGradient id="b2"><stop offset="0" stop-color="#22C55E" stop-opacity="0.35"/><stop offset="1" stop-color="#22C55E" stop-opacity="0"/></radialGradient>
+<pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.4" fill="#FFFFFF" fill-opacity=".07"/></pattern>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0B0B0F"/><stop offset="1" stop-color="#33290E"/></linearGradient>
+</defs>
+<rect width="1200" height="675" fill="url(#bg)"/>
+<circle cx="860" cy="300" r="500" fill="url(#b0)"/>
+<circle cx="220" cy="600" r="420" fill="url(#b1)"/>
+<circle cx="1120" cy="640" r="320" fill="url(#b2)"/>
+<rect width="1200" height="675" fill="url(#dots)"/>
+<circle cx="720" cy="440" r="120" fill="none" stroke="#FDE047" stroke-opacity="0.35" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="870" cy="330" r="180" fill="none" stroke="#FDE047" stroke-opacity="0.47" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="1040" cy="460" r="110" fill="none" stroke="#FDE047" stroke-opacity="0.59" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="820" y1="240" x2="930" y2="240" fill="none" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="820" y1="285" x2="930" y2="285" fill="none" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="820,240 860,240 890,252 902,285 890,316 860,328 825,328 915,425" fill="none" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="170,520 300,440 390,470 520,330" fill="none" stroke="#FDE047" stroke-opacity="0.55" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="545,300 495,315 532,350" fill="#FDE047" fill-opacity="0.6"/>
+</svg>

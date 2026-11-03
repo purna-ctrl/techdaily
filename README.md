@@ -24,7 +24,9 @@ GitHub Actions (hourly, news.yml)
 | `lib/` | Flutter app. v2 screens in `lib/screens/v2/`, story model `lib/models/story.dart`, data `lib/repositories/story_repository.dart` (reads `/data/feed.json`, falls back to Firestore). Older v1 screens are kept (compiling) but no longer in navigation; `/article/<id>` links still open. |
 | `functions/src/stories/` | v2 pipeline: `feeds.ts`, `clusterer.ts`, `story-writer.ts`, `story-pipeline.ts`, `ranking.ts`, `story-store.ts`, `migrate.ts`, `render/`. |
 | `functions/src/jobs.ts` | CLI run by the workflows: `ingest`, `render`, `daily-brief`, `migrate-articles` (+ legacy `ingest-articles`, `purge-seed`). |
-| `web/og/` | Generated 1200×630 category preview images (`python3 tool/og/generate_og.py`). No publisher images are used. |
+| `web/og/` | Generated 1200×630 category preview images (`python3 tool/og/generate_og.py`). Used only when a story has no photo. |
+| `web/art/`, `tool/art/` | Generated category artwork (`python3 tool/art/generate_art.py`), the fallback behind every story photo. |
+| Story photos | Publisher images are **hotlinked, never downloaded or rehosted**, always shown with an "Image: Source" credit linking to the original. Ingest reads them from RSS media tags or og:image; `ingest --image-fetches=N` caps og:image lookups and backfill per run (default 60). |
 | `.github/workflows/` | `news.yml` (hourly), `brief.yml` (06:00 IST push), `deploy.yml` (on push), `maintenance.yml` (manual). |
 
 ## Develop

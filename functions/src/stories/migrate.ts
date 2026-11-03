@@ -10,9 +10,10 @@ import { isLowValueTitle, STORY_FEEDS } from './feeds';
 import { pickTodayInFive } from './ranking';
 import { StoryCache, writeStories, writeTodayInFive } from './story-store';
 import { fallbackStory } from './story-writer';
-import { canonical, categoryHintFor, isDeveloping, newStory, outlets, snippetKey, STORY_SOURCES_PRIVATE, toSource, writerSource } from './story-pipeline';
+import { canonical, categoryHintFor, mergeImage, isDeveloping, newStory, outlets, snippetKey, STORY_SOURCES_PRIVATE, toSource, writerSource } from './story-pipeline';
 import { storyIdFor } from './text';
 import { NewsItem, Story } from './types';
+import { ImageCandidate, usableImageUrl } from './images';
 
 type Db = FirebaseFirestore.Firestore;
 
@@ -40,6 +41,9 @@ export function articleToItem(d: Record<string, any>): NewsItem | null {
   if (!url || !/^https?:\/\//.test(url) || title.length < 8 || isLowValueTitle(title)) return null;
   if (d.status && d.status !== 'published') return null;
   const feed = STORY_FEEDS.find((f) => f.sourceId === d.sourceId);
+  // v1 articles stored the publisher image URL; keep it when it passes the v2 filters.
+  const imgUrl = usableImageUrl(d.imageUrl);
+  const image: ImageCandidate | undefined = imgUrl ? { url: imgUrl, origin: 'media' } : undefined;
   const snippet = [d.summary, d.whatHappened].filter((x) => typeof x === 'string').join(' ').slice(0, 2000);
   return {
     sourceId: String(d.sourceId ?? ''),
@@ -52,6 +56,7 @@ export function articleToItem(d: Record<string, any>): NewsItem | null {
     region: d.region === 'IN' || feed?.region === 'IN' ? 'IN' : 'GLOBAL',
     official: Boolean(feed?.official),
     defaultCategory: feed?.category ?? toCategoryId(d.category),
+    ...(image ? { image } : {}),
   };
 }
 
@@ -89,7 +94,7 @@ export async function migrateArticles(
     if (c.storyId) {
       const s = cache.stories.get(c.storyId);
       if (!s) continue;
-      const merged: Story = { ...s, sources: [...s.sources, ...c.items.map(toSource)], updatedAt: nowIso };
+      const merged: Story = { ...s, sources: [...s.sources, ...c.items.map(toSource)], updatedAt: nowIso, image: mergeImage(s, c.items) };
       if (merged.confidence === 'medium' && outlets(merged) >= 3) merged.confidence = 'high';
       merged.developing = isDeveloping(merged);
       cache.upsert(merged);

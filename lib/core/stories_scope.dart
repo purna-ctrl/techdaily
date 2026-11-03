@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../models/story.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/story_repository.dart';
+import '../services/v2/daily_streak.dart';
 import '../services/v2/newsletter_service.dart';
+import '../services/v2/scam_game.dart';
 import '../services/v2/saved_stories.dart';
 import '../services/v2/topic_prefs.dart';
 
@@ -16,6 +18,10 @@ class StoriesScope extends InheritedWidget {
   final NewsletterService newsletter;
   final AuthRepository auth;
 
+  /// "Scam or Not?" answers + streak, and the Today in 5 "caught up" streak.
+  final ScamGameController scamGame;
+  final CaughtUpStreak caughtUp;
+
   const StoriesScope({
     super.key,
     required this.stories,
@@ -23,6 +29,8 @@ class StoriesScope extends InheritedWidget {
     required this.topics,
     required this.newsletter,
     required this.auth,
+    required this.scamGame,
+    required this.caughtUp,
     required super.child,
   });
 
@@ -34,7 +42,7 @@ class StoriesScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(StoriesScope old) =>
-      stories != old.stories || saved != old.saved || topics != old.topics || newsletter != old.newsletter || auth != old.auth;
+      stories != old.stories || saved != old.saved || topics != old.topics || newsletter != old.newsletter || auth != old.auth || scamGame != old.scamGame || caughtUp != old.caughtUp;
 }
 
 /// In-app route for a story. `/story/<slug>/` (no `/app`) is the static,

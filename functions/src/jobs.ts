@@ -40,6 +40,8 @@ import { pickTodayInFive, TodayInFive } from './stories/ranking';
 import { StoryWriter } from './stories/story-writer';
 import { Timestamp } from 'firebase-admin/firestore';
 import { Story } from './stories/types';
+import { ImageCandidate } from './stories/images';
+import { ImageReport } from './stories/story-pipeline';
 
 export const DEFAULT_PROJECT_ID = 'techdaily-prod';
 export const COMMANDS = ['ingest', 'render', 'daily-brief', 'migrate-articles', 'ingest-articles', 'purge-seed'] as const;
@@ -63,6 +65,8 @@ export interface JobArgs {
   limit?: number;
   maxAgeHours?: number;
   siteUrl?: string;
+  /** ingest: max og:image article-page fetches per run (new stories first, then backfill). */
+  imageFetches?: number;
 }
 
 export function parseArgs(argv: string[]): JobArgs {
@@ -92,6 +96,7 @@ export function parseArgs(argv: string[]): JobArgs {
     limit: int('limit'),
     maxAgeHours: int('max-age-hours'),
     siteUrl: val('site-url'),
+    imageFetches: val('image-fetches') === '0' ? 0 : int('image-fetches'),
   };
 }
 
@@ -184,7 +189,7 @@ export async function runPurgeSeed(
 
 export async function runStoriesIngest(
   args: JobArgs,
-  deps: Pick<JobDeps, 'db' | 'push'> & { writer?: StoryWriter; fetchText?: (url: string) => Promise<string> }
+  deps: Pick<JobDeps, 'db' | 'push'> & { writer?: StoryWriter; fetchText?: (url: string) => Promise<string>; fetchOgImage?: (url: string) => Promise<ImageCandidate | undefined> }
 ): Promise<{ result: StoryIngestResult; ok: boolean; reads: number; cache: StoryCache }> {
   const cache = StoryCache.load(args.cache);
   let reads = 0;
@@ -197,6 +202,8 @@ export async function runStoriesIngest(
       maxAgeHours: args.maxAgeHours,
       fetchText: deps.fetchText,
       push: deps.push,
+      imageFetchBudget: args.imageFetches ?? 60,
+      fetchOgImage: deps.fetchOgImage,
     },
     { db: args.dryRun ? undefined : deps.db, writer: deps.writer, cache }
   );
@@ -257,6 +264,29 @@ export async function runMigrate(args: JobArgs, deps: Pick<JobDeps, 'db'>): Prom
   return result;
 }
 
+const pct = (a: number, b: number) => (b ? `${Math.round((100 * a) / b)}%` : '-');
+
+/** Per-source image coverage: feed-declared images and stories with an image after og:image. */
+export function imageCoverageRows(r: ImageReport) {
+  return Object.entries(r.perSource)
+    .sort((a, b) => b[1].items - a[1].items)
+    .map(([source, s]) => ({
+      source,
+      items: s.items,
+      feedImage: pct(s.feedImages, s.items),
+      stories: s.stories,
+      storiesWithImage: pct(s.storiesWithImage, s.stories),
+    }));
+}
+
+export function imageCoverageLine(r: ImageReport): string {
+  return (
+    `changed ${r.storiesChangedWithImage}/${r.storiesChanged} (${pct(r.storiesChangedWithImage, r.storiesChanged)}), ` +
+    `all ${r.storiesTotalWithImage}/${r.storiesTotal} (${pct(r.storiesTotalWithImage, r.storiesTotal)}), ` +
+    `og fetches=${r.fetches} hits=${r.hits} backfilled=${r.backfilled}`
+  );
+}
+
 /** Initializes firebase-admin + Firestore from Application Default Credentials (incl. WIF). */
 export function initFirebase(projectId: string): FirebaseFirestore.Firestore {
   const auth = new GoogleAuth({
@@ -313,9 +343,12 @@ async function main() {
       `ai=${w.aiOk}/${w.aiCalls} invalid=${w.aiInvalid} errors=${w.aiErrors} fallback=${w.fallbacks} rateLimited=${w.rateLimited} ` +
       `model=${w.model} reads=${reads} writes=${result.firestoreWrites}`;
     console.log(`Totals: ${line}`);
+    const imgLine = imageCoverageLine(result.images);
+    console.table(imageCoverageRows(result.images));
+    console.log(`Images: ${imgLine}`);
     console.log('Today in 5:', result.today.items.map((i) => `[${i.category}] ${i.headline}`));
     writeStepSummary(
-      `### Ingest stories ${args.dryRun ? '(dry run)' : ''}\n\n${line}\n\nFailed feeds: ${result.feeds.filter((f) => f.status === 'failed').map((f) => f.sourceId).join(', ') || 'none'}\n\n**Today in 5**\n${result.today.items.map((i, n) => `${n + 1}. ${i.headline}`).join('\n')}`
+      `### Ingest stories ${args.dryRun ? '(dry run)' : ''}\n\n${line}\n\nImages: ${imgLine}\n\nFailed feeds: ${result.feeds.filter((f) => f.status === 'failed').map((f) => f.sourceId).join(', ') || 'none'}\n\n**Today in 5**\n${result.today.items.map((i, n) => `${n + 1}. ${i.headline}`).join('\n')}`
     );
     if (args.jsonOut) fs.writeFileSync(args.jsonOut, JSON.stringify({ ...result, changed: result.changed.length }, null, 2));
     if (args.storiesOut) fs.writeFileSync(args.storiesOut, JSON.stringify({ stories: cache.all() }));
