@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../core/stories_scope.dart';
@@ -25,7 +26,8 @@ class _PulsingGlowState extends State<PulsingGlow> with SingleTickerProviderStat
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (Motion.enabled(context)) _c ??= AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat(reverse: true);
+    // Web: a static glow. Animating a large blurred shadow repaints the whole card every frame.
+    if (!kIsWeb && Motion.enabled(context)) _c ??= AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat(reverse: true);
   }
 
   @override
@@ -39,7 +41,7 @@ class _PulsingGlowState extends State<PulsingGlow> with SingleTickerProviderStat
           borderRadius: BorderRadius.circular(widget.radius),
           boxShadow: [BoxShadow(color: widget.color.withValues(alpha: 0.18 + 0.27 * t), blurRadius: 18 + 22 * t, spreadRadius: -4 + 3 * t)],
         ),
-        child: widget.child,
+        child: RepaintBoundary(child: widget.child),
       );
 
   @override

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
+import '../../core/config/app_config.dart';
 import '../../models/story.dart';
 import '../v2/story_parts.dart' show openExternal;
 import 'category_art.dart';
@@ -10,9 +11,9 @@ import 'ui.dart';
 ///
 /// * The art is always painted first, so a slow, missing or broken image
 ///   never shows a blank box (the error builder keeps the art).
-/// * Web: publisher CDNs rarely send CORS headers, and CanvasKit cannot draw
-///   cross-origin bytes without them. `WebHtmlElementStrategy.prefer` shows
-///   the image as a plain `<img>` element instead (no CORS needed).
+/// * Web: publisher CDNs rarely send CORS headers, so images go through the
+///   `kImageProxy` pass-through and are drawn in the canvas. Plain `<img>`
+///   platform views (the old way) made scrolling lag.
 /// * [cacheWidth] keeps decoded bitmaps small on mobile.
 class StoryImageView extends StatelessWidget {
   final Story story;
@@ -47,12 +48,14 @@ class StoryImageView extends StatelessWidget {
           child: Transform.scale(
             scale: parallax == 0 ? 1 : 1.12,
             child: Image.network(
-              img.url,
+              kIsWeb ? webImageUrl(img.url) : img.url,
               key: ValueKey(img.url),
               fit: BoxFit.cover,
               // Hotlinked: never re-hosted. Errors fall back to the art below.
-              webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-              cacheWidth: kIsWeb || cacheWidth == null ? null : (cacheWidth! * dpr).round(),
+              // Web: through the CORS pass-through it draws in the canvas (smooth
+              // scrolling); `<img>` only if that fails and there is no proxy.
+              webHtmlElementStrategy: kImageProxy.isEmpty ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
+              cacheWidth: cacheWidth == null ? null : (cacheWidth! * dpr).round(),
               filterQuality: FilterQuality.medium,
               gaplessPlayback: true,
               semanticLabel: null,

@@ -52,3 +52,12 @@ const String kAskEndpoint = String.fromEnvironment('ASK_ENDPOINT', defaultValue:
 
 /// Longest question the ask box accepts (the Worker enforces the same).
 const int kAskMaxChars = 300;
+
+/// Web image pass-through (Cloudflare Worker `workers/img/`): adds CORS so the
+/// web app can draw publisher photos inside its canvas instead of as `<img>`
+/// platform views, which made scrolling lag. Empty = direct `<img>` elements.
+const String kImageProxy = String.fromEnvironment('IMAGE_PROXY', defaultValue: 'https://techdaily-img.purnabannu1488.workers.dev/');
+
+/// The URL the web app loads for a publisher image.
+String webImageUrl(String url) =>
+    kImageProxy.isEmpty ? url : '$kImageProxy?u=${Uri.encodeComponent(url)}';
