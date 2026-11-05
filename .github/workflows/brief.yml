@@ -3,8 +3,7 @@ name: Today in 5 (06:00 IST)
 # The hourly news run already refreshes "Today in 5"; this run picks the morning edition from the
 # stories of the last 48 h and sends the daily push.
 on:
-  schedule:
-    - cron: '30 0 * * *' # 00:30 UTC = 06:00 IST
+  # Scheduled by the Cloudflare Worker workers/cron (GitHub's own cron skipped most runs).
   workflow_dispatch:
     inputs:
       push:

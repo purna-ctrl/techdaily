@@ -3,8 +3,7 @@ name: News (ingest + render + deploy)
 # Hourly: fetch feeds -> cluster -> write story cards (Gemini, throttled) -> pre-render static pages
 # into the Flutter web build -> deploy Hosting. Free Spark plan: no Cloud Functions, no SSR.
 on:
-  schedule:
-    - cron: '5 * * * *' # every hour at :05 (UTC)
+  # Scheduled by the Cloudflare Worker workers/cron (GitHub's own cron skipped most runs).
   workflow_dispatch:
     inputs:
       dry_run:
