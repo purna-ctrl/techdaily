@@ -24,6 +24,9 @@ abstract class AuthRepository {
 
   /// Sends a password reset email to the given address.
   Future<void> sendPasswordResetEmail(String email);
+
+  /// Permanently deletes the signed-in account and its saved data.
+  Future<void> deleteAccount();
 }
 
 /// In-memory implementation of [AuthRepository] used for testing and offline fallback.
@@ -94,6 +97,12 @@ class LocalAuthRepository implements AuthRepository {
     if (email.trim().isEmpty) {
       throw Exception('Please provide a valid email address.');
     }
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    _user = null;
+    _authController.add(null);
   }
 
   void dispose() {

@@ -139,6 +139,33 @@ class FirebaseAuthService implements AuthRepository {
     }
   }
 
+  @override
+  Future<void> deleteAccount() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return;
+    final doc = _firestore.collection('users').doc(user.uid);
+    try {
+      for (final sub in const ['savedStories', 'savedArticles']) {
+        final snap = await doc.collection(sub).get();
+        for (final d in snap.docs) {
+          await d.reference.delete();
+        }
+      }
+      await doc.delete();
+    } catch (_) {
+      // Best effort: the account itself is still deleted below.
+    }
+    try {
+      await user.delete();
+    } on fb.FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        await _firebaseAuth.signOut();
+        throw 'For your safety, please sign in again and then delete your account.';
+      }
+      throw _humanizeAuthError(e);
+    }
+  }
+
   String _humanizeAuthError(fb.FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':

@@ -43,9 +43,14 @@ jobs:
           if [ -n "$KS_B64" ]; then
             echo "$KS_B64" | base64 -d > android/app/release.keystore
             printf 'storeFile=release.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$KS_PASS" "$KEY_ALIAS" "$KEY_PASS" > android/key.properties
-            echo "Using release keystore"
+            echo "Using release keystore (b64 secret)"
+          elif [ -n "$KS_PASS" ] && [ -f android/release.p12.enc ]; then
+            # Encrypted PKCS12 key committed in the repo; only the password is a secret.
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in android/release.p12.enc -out android/app/release.keystore -pass env:KS_PASS
+            printf 'storeFile=release.keystore\nstorePassword=%s\nkeyAlias=techdaily\nkeyPassword=%s\nstoreType=pkcs12\n' "$KS_PASS" "$KS_PASS" > android/key.properties
+            echo "Using release keystore (encrypted file)"
           else
-            echo "::warning::No ANDROID_KEYSTORE_B64 secret; APK is debug-signed"
+            echo "::warning::No signing secret; APK is debug-signed"
           fi
       - run: flutter pub get
       - name: Build APK

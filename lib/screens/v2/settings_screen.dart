@@ -4,6 +4,7 @@ import '../../core/constants/story_categories.dart';
 import '../../core/stories_scope.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/auth_user.dart';
+import '../../repositories/auth_repository.dart';
 import '../../widgets/v2/story_parts.dart';
 import '../auth_screen.dart';
 import '../legal_screen.dart';
@@ -67,12 +68,25 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AuthScreen(authRepository: scope.auth))),
                   );
                 }
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                  leading: const Icon(Icons.account_circle_rounded),
-                  title: Text(user.displayName?.isNotEmpty == true ? user.displayName! : user.email),
-                  subtitle: Text(user.email),
-                  trailing: TextButton(onPressed: scope.auth.signOut, child: const Text('Sign out')),
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      leading: const Icon(Icons.account_circle_rounded),
+                      title: Text(user.displayName?.isNotEmpty == true ? user.displayName! : user.email),
+                      subtitle: Text(user.email),
+                      trailing: TextButton(onPressed: scope.auth.signOut, child: const Text('Sign out')),
+                    ),
+                    ListTile(
+                      key: const Key('delete-account'),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      leading: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent),
+                      title: const Text('Delete account', style: TextStyle(color: Colors.redAccent)),
+                      subtitle: const Text('Removes your account and synced saved stories.'),
+                      onTap: () => _confirmDelete(context, scope.auth),
+                    ),
+                  ],
                 );
               },
             ),
@@ -164,5 +178,27 @@ class NewsletterScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Future<void> _confirmDelete(BuildContext context, AuthRepository auth) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('Delete your account?'),
+      content: const Text('This permanently deletes your TechDaily account and the saved stories synced to it. Stories saved on this device stay.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete', style: TextStyle(color: Colors.redAccent))),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await auth.deleteAccount();
+    messenger.showSnackBar(const SnackBar(content: Text('Your account was deleted.')));
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
   }
 }
