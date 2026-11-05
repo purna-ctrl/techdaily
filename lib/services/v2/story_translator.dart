@@ -22,7 +22,7 @@ class WorkerTranslationApi implements TranslationApi {
   final http.Client? client;
   final String endpoint;
   final Duration timeout;
-  WorkerTranslationApi({this.client, String? endpoint, this.timeout = const Duration(seconds: 50)}) : endpoint = endpoint ?? kAskEndpoint;
+  WorkerTranslationApi({this.client, String? endpoint, this.timeout = const Duration(seconds: 90)}) : endpoint = endpoint ?? kAskEndpoint;
 
   @override
   Future<Map<String, TrFields>> translate(String lang, Map<String, TrFields> items) async {
