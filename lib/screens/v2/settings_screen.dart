@@ -6,8 +6,11 @@ import '../../core/theme/app_theme.dart';
 import '../../models/auth_user.dart';
 import '../../repositories/auth_repository.dart';
 import '../../widgets/v2/story_parts.dart';
+import '../../widgets/v3/language_widgets.dart' show LanguageOptions;
+import 'scam_check_screen.dart';
 import '../auth_screen.dart';
 import '../legal_screen.dart';
+import '../../l10n/app_language.dart' show tr;
 
 /// Settings: topic filter, newsletter, optional sign-in, About.
 class SettingsScreen extends StatelessWidget {
@@ -22,13 +25,27 @@ class SettingsScreen extends StatelessWidget {
           child: Semantics(header: true, child: Text(t, style: AppTheme.display(17, color: theme.colorScheme.onSurface))),
         );
     return Scaffold(
-      appBar: AppBar(title: Text('Settings', style: AppTheme.display(20, color: theme.colorScheme.onSurface))),
+      appBar: AppBar(title: Text(tr('Settings'), style: AppTheme.display(20, color: theme.colorScheme.onSurface))),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
           child: ListView(padding: const EdgeInsets.fromLTRB(12, 0, 12, 40), children: [
-            heading('Topics'),
-            Text('Choose which categories appear as tabs and in Top Stories. Saved on this device.',
+            heading(tr('Language')),
+            Text(tr('Menus are translated here; stories are translated by AI when you open them.'),
+                style: TextStyle(color: AppTheme.mutedOf(context), fontSize: 13.5)),
+            const LanguageOptions(),
+            heading(tr('Safety tools')),
+            ListTile(
+              key: const ValueKey('settings-scam-check'),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              leading: const Icon(Icons.policy_rounded, color: Color(0xFFFF7683)),
+              title: Text(tr('Scam checker')),
+              subtitle: Text(tr('Paste a message and see if it’s a scam.')),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => ScamCheckScreen.open(context),
+            ),
+            heading(tr('Topics')),
+            Text(tr('Choose which categories appear as tabs and in Top Stories. Saved on this device.'),
                 style: TextStyle(color: AppTheme.mutedOf(context), fontSize: 13.5)),
             const SizedBox(height: 6),
             ValueListenableBuilder<Set<String>>(
@@ -46,13 +63,13 @@ class SettingsScreen extends StatelessWidget {
                 if (hidden.isNotEmpty)
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton(onPressed: scope.topics.showAll, child: const Text('Show all topics')),
+                    child: TextButton(onPressed: scope.topics.showAll, child: Text(tr('Show all topics'))),
                   ),
               ]),
             ),
-            heading('Newsletter'),
+            heading(tr('Newsletter')),
             const NewsletterSignup(source: 'app-settings'),
-            heading('Account'),
+            heading(tr('Account')),
             StreamBuilder<AuthUser?>(
               stream: scope.auth.authStateChanges,
               initialData: scope.auth.currentUser,
@@ -62,8 +79,8 @@ class SettingsScreen extends StatelessWidget {
                   return ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                     leading: const Icon(Icons.account_circle_outlined),
-                    title: const Text('Sign in (optional)'),
-                    subtitle: const Text('Keep saved stories on all your devices. Google or email.'),
+                    title: Text(tr('Sign in (optional)')),
+                    subtitle: Text(tr('Keep saved stories on all your devices. Google or email.')),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AuthScreen(authRepository: scope.auth))),
                   );
@@ -76,39 +93,39 @@ class SettingsScreen extends StatelessWidget {
                       leading: const Icon(Icons.account_circle_rounded),
                       title: Text(user.displayName?.isNotEmpty == true ? user.displayName! : user.email),
                       subtitle: Text(user.email),
-                      trailing: TextButton(onPressed: scope.auth.signOut, child: const Text('Sign out')),
+                      trailing: TextButton(onPressed: scope.auth.signOut, child: Text(tr('Sign out'))),
                     ),
                     ListTile(
                       key: const Key('delete-account'),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                       leading: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent),
-                      title: const Text('Delete account', style: TextStyle(color: Colors.redAccent)),
-                      subtitle: const Text('Removes your account and synced saved stories.'),
+                      title: Text(tr('Delete account'), style: TextStyle(color: Colors.redAccent)),
+                      subtitle: Text(tr('Removes your account and synced saved stories.')),
                       onTap: () => _confirmDelete(context, scope.auth),
                     ),
                   ],
                 );
               },
             ),
-            heading('About'),
+            heading(tr('About')),
             ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
               leading: const Icon(Icons.info_outline_rounded),
-              title: const Text('About TechDaily'),
+              title: Text(tr('About TechDaily')),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => Navigator.of(context).pushNamed('/app/about'),
             ),
             ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
               leading: const Icon(Icons.privacy_tip_outlined),
-              title: const Text('Privacy'),
+              title: Text(tr('Privacy')),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalScreen(doc: LegalDoc.privacy))),
             ),
             ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
               leading: const Icon(Icons.description_outlined),
-              title: const Text('Terms of use'),
+              title: Text(tr('Terms of use')),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalScreen(doc: LegalDoc.terms))),
             ),
@@ -131,7 +148,7 @@ class AboutScreen extends StatelessWidget {
           child: Semantics(header: true, child: Text(t, style: AppTheme.display(18, color: theme.colorScheme.onSurface))),
         );
     return Scaffold(
-      appBar: AppBar(title: Text('About TechDaily', style: AppTheme.display(19, color: theme.colorScheme.onSurface))),
+      appBar: AppBar(title: Text(tr('About TechDaily'), style: AppTheme.display(19, color: theme.colorScheme.onSurface))),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
@@ -168,7 +185,7 @@ class NewsletterScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text('Newsletter', style: AppTheme.display(19, color: theme.colorScheme.onSurface))),
+      appBar: AppBar(title: Text(tr('Newsletter'), style: AppTheme.display(19, color: theme.colorScheme.onSurface))),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),

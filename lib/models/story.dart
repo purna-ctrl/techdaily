@@ -168,6 +168,13 @@ class Story {
   final StoryImage? image;
   final String promptVersion;
 
+  /// The English story this one was translated from (null for originals).
+  /// Navigation, saving and re-translation always use the original.
+  final Story? translatedFrom;
+
+  /// The English original of this story.
+  Story get original => translatedFrom ?? this;
+
   const Story({
     required this.id,
     required this.slug,
@@ -191,6 +198,7 @@ class Story {
     this.aiModel = '',
     this.region = 'GLOBAL',
     this.image,
+    this.translatedFrom,
   });
 
   factory Story.fromMap(Map<String, dynamic> m, {String? docId}) {
@@ -252,6 +260,61 @@ class Story {
       };
 
   bool get isValid => id.isNotEmpty && slug.isNotEmpty && headline.isNotEmpty;
+
+  /// A copy with translated text (Telugu / Hindi from the AI Worker). Field
+  /// names match `StoryTranslator.fullFields`; anything missing, or a list of
+  /// the wrong length, keeps the original English.
+  Story withTranslation(Map<String, Object> f) {
+    String s(String k, String orig) {
+      final v = f[k];
+      return v is String && v.trim().isNotEmpty ? v : orig;
+    }
+
+    List<String> l(String k, List<String> orig) {
+      final v = f[k];
+      return v is List<String> && v.length == orig.length && orig.isNotEmpty ? v : orig;
+    }
+
+    // whatToDo / tldr etc. were sent after StoryDisplay cleaned them; when the
+    // cleaned list differs from the stored one, translate the cleaned list.
+    final shownTodo = display.whatToDo;
+    final todo = f['whatToDo'] is List<String> && (f['whatToDo'] as List<String>).length == shownTodo.length ? f['whatToDo'] as List<String> : whatToDo;
+    final labels = l('keyLabels', keyNumbers.map((k) => k.label).toList());
+    final qs = l('faqQ', faq.map((x) => x.q).toList());
+    final as = l('faqA', faq.map((x) => x.a).toList());
+    return Story(
+      id: id,
+      slug: slug,
+      headline: s('headline', headline),
+      category: category,
+      publishedAt: publishedAt,
+      updatedAt: updatedAt,
+      sources: sources,
+      whatHappened: s('whatHappened', whatHappened),
+      affectsWho: s('affectsWho', affectsWho),
+      whatToDo: todo,
+      whatItMeans: s('whatItMeans', whatItMeans),
+      tldr: s('tldr', tldr),
+      keyNumbers: [for (var i = 0; i < keyNumbers.length; i++) KeyNumber(keyNumbers[i].value, labels[i])],
+      goodToKnow: s('goodToKnow', goodToKnow),
+      faq: [for (var i = 0; i < faq.length; i++) FaqItem(qs[i], as[i])],
+      promptVersion: promptVersion,
+      scam: scam == null
+          ? null
+          : ScamInfo(
+              howItWorks: s('scamHow', scam!.howItWorks),
+              warningSigns: l('scamSigns', scam!.warningSigns),
+              ifTargeted: l('scamIfTargeted', scam!.ifTargeted),
+              advisoryUrl: scam!.advisoryUrl,
+            ),
+      confidence: confidence,
+      developing: developing,
+      aiModel: aiModel,
+      region: region,
+      image: image,
+      translatedFrom: original,
+    );
+  }
 
   StoryCategory get categoryInfo => storyCategoryById(category);
 

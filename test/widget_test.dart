@@ -216,6 +216,8 @@ void main() {
     final (_, _, newsletter, topics) = await pumpApp(tester);
     await tester.tap(find.text('Settings').last);
     await tester.pumpAndSettle();
+    // Language + Safety tools sit above Topics now: bring the switch on screen first.
+    await center(tester, find.byKey(const ValueKey('topic-privacy')));
     await tester.tap(find.byKey(const ValueKey('topic-privacy')));
     await tester.pumpAndSettle();
     expect(topics.value, contains('privacy'));

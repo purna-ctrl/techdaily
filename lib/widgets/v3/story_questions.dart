@@ -8,6 +8,7 @@ import '../../services/v2/story_ask.dart';
 import 'jargon.dart';
 import 'story_sections.dart';
 import 'ui.dart';
+import '../../l10n/app_language.dart' show tr;
 
 /// One question section of a story: title + icon + body.
 class StorySectionData {
@@ -92,7 +93,7 @@ List<StorySectionData> storySections(Story s, {bool compact = false}) {
       };
       out.add(StorySectionData(qs.whatToDo.label, qs.whatToDo.icon, body));
     } else if (d.goodToKnow.isNotEmpty) {
-      out.add(StorySectionData(kGoodToKnowLabel, Icons.info_rounded, JargonText(d.goodToKnow, accent: c)));
+      out.add(StorySectionData(tr(kGoodToKnowLabel), Icons.info_rounded, JargonText(d.goodToKnow, accent: c)));
     }
   }
 
@@ -101,13 +102,13 @@ List<StorySectionData> storySections(Story s, {bool compact = false}) {
     text(qs.whatHappened, [d.whatHappened, scam.howItWorks].where((x) => x.isNotEmpty).join(' '), scam: true);
     text(qs.affectsWho, d.affectsWho);
     if (scam.warningSigns.isNotEmpty) {
-      out.add(StorySectionData('Spot the signs', Icons.warning_amber_rounded,
+      out.add(StorySectionData(tr('Spot the signs'), Icons.warning_amber_rounded,
           _Bullets(items: scam.warningSigns, color: TD.focus, icon: Icons.warning_rounded),
           scam: true));
     }
     todo();
     out.add(StorySectionData(
-      'If it happened to you',
+      tr('If it happened to you'),
       Icons.health_and_safety_rounded,
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         TickChecklist(items: scam.ifTargeted, color: TD.redTint, numbered: true),
@@ -169,14 +170,14 @@ class StoryTopBlock extends StatelessWidget {
             border: Border.all(color: cat.color.withValues(alpha: 0.4)),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Semantics(header: true, child: Text(kTldrLabel.toUpperCase(), style: kicker)),
+            Semantics(header: true, child: Text(tr(kTldrLabel).toUpperCase(), style: kicker)),
             const SizedBox(height: 6),
             Text(d.tldr, style: const TextStyle(fontSize: 18, height: 1.42, fontWeight: FontWeight.w600, color: TD.ink)),
           ]),
         ),
       if (s.keyNumbers.isNotEmpty) ...[
         const SizedBox(height: 14),
-        Semantics(header: true, child: Text(kKeyNumbersLabel.toUpperCase(), style: kicker)),
+        Semantics(header: true, child: Text(tr(kKeyNumbersLabel).toUpperCase(), style: kicker)),
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final k in s.keyNumbers)
@@ -360,7 +361,7 @@ class _AskAboutThisState extends State<AskAboutThis> {
                   style: OutlinedButton.styleFrom(foregroundColor: c, shape: const StadiumBorder(), side: BorderSide(color: c.withValues(alpha: 0.6))),
                   onPressed: widget.onOpenSources,
                   icon: const Icon(Icons.article_outlined, size: 18),
-                  label: const Text('Read the sources'),
+                  label: Text(tr('Read the sources')),
                 ),
               ),
           ]),

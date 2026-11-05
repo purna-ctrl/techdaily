@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/story_categories.dart';
 import '../../core/theme/app_theme.dart';
+import '../../l10n/app_language.dart' show tr;
 
 /// v3 design tokens (dark-first; WCAG AA on every text colour used here).
 class TD {
@@ -146,7 +147,7 @@ class DevelopingPill extends StatelessWidget {
             decoration: const BoxDecoration(color: TD.focus, shape: BoxShape.circle, boxShadow: [BoxShadow(color: TD.focus, blurRadius: 6)]),
           ),
           const SizedBox(width: 5),
-          Text('DEVELOPING', style: AppTheme.kicker(size: small ? 9.5 : 10.5, color: TD.focus).copyWith(fontWeight: FontWeight.w800)),
+          Text(tr('DEVELOPING'), style: AppTheme.kicker(size: small ? 9.5 : 10.5, color: TD.focus).copyWith(fontWeight: FontWeight.w800)),
         ]),
       ),
     );

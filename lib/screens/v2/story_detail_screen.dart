@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 import '../../core/stories_scope.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/story.dart';
+import '../../services/v2/story_translator.dart';
 import '../../widgets/story_widgets.dart' show FriendlyState;
 import '../../services/v2/story_share.dart';
 import '../../widgets/v2/story_parts.dart';
 import '../../widgets/v3/jargon.dart';
+import '../../widgets/v3/language_widgets.dart' show TranslationNote;
 import '../../widgets/v3/story_image.dart';
 import '../../widgets/v3/story_questions.dart';
 import '../../widgets/v3/story_sections.dart';
 import '../../widgets/v3/ui.dart';
 import '../../core/constants/jargon.dart';
+import '../../l10n/app_language.dart' show tr;
 
 /// Full story, image-led: parallax hero with credit, card sections with
 /// tap-to-explain jargon, animated "What to do" checklist, the scam template,
@@ -23,7 +26,11 @@ class StoryDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = story;
+    final tx = StoriesScope.of(context).translations;
+    return ListenableBuilder(listenable: tx, builder: (context, _) => _page(context, tx.full(story), tx));
+  }
+
+  Widget _page(BuildContext context, Story s, StoryTranslator tx) {
     final cat = s.categoryInfo;
     final pad = MediaQuery.paddingOf(context);
     final d = s.display;
@@ -58,7 +65,7 @@ class StoryDetailScreen extends StatelessWidget {
             leading: Padding(
               padding: const EdgeInsets.all(6),
               child: IconButton(
-                tooltip: 'Back',
+                tooltip: tr('Back'),
                 style: IconButton.styleFrom(backgroundColor: const Color(0x990B0B0F)),
                 icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
                 onPressed: () {
@@ -71,7 +78,7 @@ class StoryDetailScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: IconButton(
-                  tooltip: 'Copy link',
+                  tooltip: tr('Copy link'),
                   style: IconButton.styleFrom(backgroundColor: const Color(0x990B0B0F)),
                   onPressed: () => const StoryShare().copyLink(context, s),
                   icon: const Icon(Icons.link_rounded, color: Colors.white),
@@ -99,7 +106,7 @@ class StoryDetailScreen extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(color: TD.red, borderRadius: BorderRadius.circular(999)),
-                              child: Text('SCAM ALERT', style: AppTheme.kicker(size: 11, color: TD.bg).copyWith(fontWeight: FontWeight.w900)),
+                              child: Text(tr('SCAM ALERT'), style: AppTheme.kicker(size: 11, color: TD.bg).copyWith(fontWeight: FontWeight.w900)),
                             ),
                         ]),
                         const SizedBox(height: 10),
@@ -122,6 +129,11 @@ class StoryDetailScreen extends StatelessWidget {
           ),
           SliverToBoxAdapter(
             child: constrained(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (tx.lang != 'en')
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: TranslationNote(status: tx.fullStatus(story), onRetry: () => tx.retry(story)),
+                ),
               StoryTopBlock(story: s),
               const SizedBox(height: 4),
               for (var i = 0; i < sections.length; i++)
@@ -137,7 +149,7 @@ class StoryDetailScreen extends StatelessWidget {
                   ),
                 ),
               SectionCard(
-                title: 'Ask about this',
+                title: tr('Ask about this'),
                 icon: Icons.forum_rounded,
                 color: cat.color,
                 child: AskAboutThis(story: s, onOpenSources: () => showSourcesSheet(context, s)),
@@ -147,7 +159,7 @@ class StoryDetailScreen extends StatelessWidget {
                 JargonChips(entries: words, accent: cat.tint),
               ],
               SectionCard(
-                title: s.sources.length > 1 ? 'Read the originals' : 'Read the original',
+                title: s.sources.length > 1 ? tr('Read the originals') : tr('Read the original'),
                 icon: Icons.link_rounded,
                 color: cat.color,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -215,7 +227,7 @@ class _StoryRouteScreenState extends State<StoryRouteScreen> {
         return Scaffold(
           appBar: AppBar(
             leading: IconButton(
-              tooltip: 'Home',
+              tooltip: tr('Home'),
               icon: const Icon(Icons.arrow_back_rounded),
               onPressed: () {
                 final nav = Navigator.of(context);
@@ -227,9 +239,9 @@ class _StoryRouteScreenState extends State<StoryRouteScreen> {
               ? const Center(child: CircularProgressIndicator())
               : FriendlyState(
                   icon: snap.hasError ? Icons.wifi_off_rounded : Icons.article_outlined,
-                  title: snap.hasError ? 'Couldn’t load this story' : 'Story not found',
+                  title: snap.hasError ? tr('Couldn’t load this story') : tr('Story not found'),
                   message: snap.hasError ? 'Check your connection and try again.' : 'It may be too old. Here’s what’s new instead.',
-                  actionLabel: snap.hasError ? 'Try again' : 'Go to home',
+                  actionLabel: snap.hasError ? tr('Try again') : tr('Go to home'),
                   actionIcon: snap.hasError ? Icons.refresh_rounded : Icons.home_rounded,
                   onAction: snap.hasError
                       ? () => setState(() => _future = StoriesScope.of(context).stories.getBySlug(widget.slug))

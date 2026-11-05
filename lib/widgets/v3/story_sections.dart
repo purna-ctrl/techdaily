@@ -9,6 +9,7 @@ import '../../services/v2/story_share.dart';
 import '../v2/story_parts.dart' show openExternal, istTime;
 import 'jargon.dart';
 import 'ui.dart';
+import '../../l10n/app_language.dart';
 
 /// Card section ("What happened", "Does it affect me?" …) with an icon bubble.
 class SectionCard extends StatelessWidget {
@@ -194,7 +195,7 @@ class HelplineCallout extends StatelessWidget {
           style: FilledButton.styleFrom(backgroundColor: TD.red, foregroundColor: TD.bg, shape: const StadiumBorder()),
           onPressed: () => openExternal(context, 'tel:1930'),
           icon: const Icon(Icons.call_rounded, size: 18),
-          label: const Text('Call 1930'),
+          label: Text(tr('Call 1930')),
         ),
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(foregroundColor: TD.ink, shape: const StadiumBorder(), side: const BorderSide(color: TD.glassBorder)),
@@ -218,9 +219,9 @@ class ScamSections extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      SectionCard(title: 'How the trick works', icon: Icons.phishing_rounded, color: TD.red, scam: true, child: JargonText(scam.howItWorks, accent: TD.redTint)),
+      SectionCard(title: tr('How the trick works'), icon: Icons.phishing_rounded, color: TD.red, scam: true, child: JargonText(scam.howItWorks, accent: TD.redTint)),
       SectionCard(
-        title: 'Warning signs',
+        title: tr('Warning signs'),
         icon: Icons.warning_amber_rounded,
         color: TD.red,
         scam: true,
@@ -241,7 +242,7 @@ class ScamSections extends StatelessWidget {
                 style: OutlinedButton.styleFrom(foregroundColor: TD.redTint, shape: const StadiumBorder(), side: BorderSide(color: TD.red.withValues(alpha: 0.6))),
                 onPressed: () => openExternal(context, scam.advisoryUrl!),
                 icon: const Icon(Icons.verified_user_rounded, size: 18),
-                label: const Text('Official advisory'),
+                label: Text(tr('Official advisory')),
               ),
             ),
         ]),
@@ -262,7 +263,7 @@ Future<void> showSourcesSheet(BuildContext context, Story story) {
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
         child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(20, 0, 20, 24), children: [
-          Text(story.sources.length > 1 ? 'Read the originals' : 'Read the original', style: AppTheme.display(22, color: TD.ink)),
+          Text(story.sources.length > 1 ? tr('Read the originals') : tr('Read the original'), style: AppTheme.display(22, color: TD.ink)),
           const SizedBox(height: 4),
           const Text('TechDaily explains the news in simple words. Always check the original before acting on money or security advice.',
               style: TextStyle(fontSize: 13.5, color: TD.muted, height: 1.45)),
@@ -321,8 +322,8 @@ class _ListenButtonState extends State<ListenButton> {
       d.tldr,
       part(q.whatHappened.label, [d.whatHappened, if (s.scam != null) s.scam!.howItWorks].join(' ')),
       part(q.affectsWho.label, d.affectsWho),
-      if (s.scam != null) part('Spot the signs.', s.scam!.warningSigns.join('. ')),
-      d.whatToDo.isNotEmpty ? part(q.whatToDo.label, d.whatToDo.join('. ')) : part('Good to know.', d.goodToKnow),
+      if (s.scam != null) part('${tr('Spot the signs')}.', s.scam!.warningSigns.join('. ')),
+      d.whatToDo.isNotEmpty ? part(q.whatToDo.label, d.whatToDo.join('. ')) : part('${tr('Good to know')}.', d.goodToKnow),
       part(q.whatItMeans.label, d.whatItMeans),
     ].where((x) => x.trim().isNotEmpty).join('\n');
   }
@@ -330,11 +331,27 @@ class _ListenButtonState extends State<ListenButton> {
   @override
   Widget build(BuildContext context) {
     final playing = _tts?.state == TtsPlaybackState.playing;
-    final label = playing ? 'Stop' : 'Listen';
+    final label = playing ? tr('Stop') : tr('Listen');
     final icon = Icon(playing ? Icons.stop_circle_rounded : Icons.headphones_rounded);
-    void onTap() => playing ? tts.stop() : tts.speak(_script(widget.story));
-    if (widget.iconOnly) return IconButton(tooltip: playing ? 'Stop listening' : 'Listen to this story', onPressed: onTap, icon: icon);
-    return _BarButton(icon: icon, label: label, onTap: onTap, tooltip: playing ? 'Stop listening' : 'Listen to this story');
+    Future<void> speak() async {
+      final lang = appLanguage.value;
+      final t = tts;
+      var story = widget.story;
+      if (t is FlutterTtsService) {
+        final hasVoice = await t.useLanguage(lang.ttsLocale);
+        if (!hasVoice && lang != AppLang.en) {
+          story = story.original; // no voice for Telugu/Hindi here: read the English story
+          if (context.mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(tr('Voice for this language isn’t on this device — reading in English.'))));
+          }
+        }
+      }
+      await t.speak(_script(story));
+    }
+
+    void onTap() => playing ? tts.stop() : speak();
+    if (widget.iconOnly) return IconButton(tooltip: playing ? tr('Stop listening') : tr('Listen to this story'), onPressed: onTap, icon: icon);
+    return _BarButton(icon: icon, label: label, onTap: onTap, tooltip: playing ? tr('Stop listening') : tr('Listen to this story'));
   }
 }
 
@@ -414,16 +431,16 @@ class StoryActionBar extends StatelessWidget {
             _BarButton(
               key: ValueKey('save-${story.id}'),
               icon: Icon(saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded),
-              label: saved ? 'Saved' : 'Save',
+              label: saved ? tr('Saved') : tr('Save'),
               color: saved ? cat.tint : null,
-              tooltip: saved ? 'Remove from saved' : 'Save story',
+              tooltip: saved ? tr('Remove from saved') : tr('Save story'),
               onTap: () => toggleSave(context, story),
             ),
             ListenButton(story: story),
             _BarButton(
               icon: const Icon(Icons.article_outlined),
-              label: 'Sources',
-              tooltip: 'Read original sources',
+              label: tr('Sources'),
+              tooltip: tr('Read original sources'),
               onTap: () => showSourcesSheet(context, story),
             ),
           ]),
@@ -439,7 +456,7 @@ Future<void> toggleSave(BuildContext context, Story story) async {
   final now = await scope.saved.toggle(story);
   messenger?.hideCurrentSnackBar();
   messenger?.showSnackBar(SnackBar(
-    content: Text(now ? (scope.saved.isGuest ? 'Saved on this device' : 'Saved to your account') : 'Removed from saved'),
+    content: Text(now ? (scope.saved.isGuest ? tr('Saved on this device') : tr('Saved to your account')) : tr('Removed from saved')),
     duration: const Duration(seconds: 2),
   ));
 }

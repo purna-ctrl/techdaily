@@ -5,12 +5,16 @@ import '../../core/stories_scope.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/story.dart';
 import '../../widgets/story_widgets.dart' show TechDailyWordmark, FriendlyState;
+import '../../services/v2/story_translator.dart';
+import '../../widgets/v3/language_widgets.dart';
 import '../../widgets/v3/scam_widgets.dart';
+import 'scam_check_screen.dart';
 import '../../widgets/v3/story_cards.dart';
 import '../../widgets/v3/story_rings.dart';
 import '../../widgets/v3/ui.dart';
 import 'reels_screen.dart';
 import 'story_viewer_screen.dart';
+import '../../l10n/app_language.dart' show tr;
 
 /// Home: Today in 5 rings → pill category tabs → hero (#1) → Scam Radar →
 /// Scam or Not? → per-category image rails → latest list. A category tab
@@ -68,9 +72,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final scope = StoriesScope.of(context);
-    return ValueListenableBuilder<Set<String>>(
-      valueListenable: scope.topics,
-      builder: (context, hidden, _) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([scope.topics, scope.translations]),
+      builder: (context, _) {
+        final hidden = scope.topics.value;
         final visible = scope.topics.visibleCategories;
         if (_tab != kTopStories.id && !visible.any((c) => c.id == _tab)) _tab = kTopStories.id;
         return Scaffold(
@@ -85,9 +90,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                 return SafeArea(
                   child: FriendlyState(
                     icon: Icons.wifi_off_rounded,
-                    title: 'Couldn’t load stories',
-                    message: 'Check your connection and try again.',
-                    actionLabel: 'Try again',
+                    title: tr('Couldn’t load stories'),
+                    message: tr('Check your connection and try again.'),
+                    actionLabel: tr('Try again'),
                     onAction: _refresh,
                   ),
                 );
@@ -123,6 +128,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       child: Row(children: [
         const TechDailyWordmark(size: 21),
         const Spacer(),
+        const LanguageChip(),
+        const SizedBox(width: 8),
         if (reelStories.isNotEmpty)
           FilledButton.icon(
             key: const ValueKey('open-reels'),
@@ -135,9 +142,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             ),
             onPressed: () => ReelsScreen.open(context, reelStories.take(40).toList()),
             icon: const Icon(Icons.play_circle_fill_rounded, size: 18, color: Color(0xFFFF8255)),
-            label: const Text('Reels'),
+            label: Text(tr('Reels')),
           ),
-        IconButton(tooltip: 'Refresh', onPressed: _refresh, icon: const Icon(Icons.refresh_rounded)),
+        IconButton(tooltip: tr('Refresh'), onPressed: _refresh, icon: const Icon(Icons.refresh_rounded)),
       ]),
     );
   }
@@ -148,7 +155,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       for (final t in feed.today)
         if (!hidden.contains(t.category) && feed.bySlug(t.slug) != null) feed.bySlug(t.slug)!,
     ];
-    final list = today.isNotEmpty ? today : feed.topStories().where((s) => !hidden.contains(s.category)).take(5).toList();
+    final tx = scope.translations;
+    final list = [for (final s in (today.isNotEmpty ? today : feed.topStories().where((s) => !hidden.contains(s.category)).take(5).toList())) tx.card(s)];
     return ListenableBuilder(
       listenable: scope.caughtUp,
       builder: (context, _) => StoryRings(
@@ -163,15 +171,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   List<Widget> _content(BuildContext context, StoryFeed feed, List<Story> top, List<StoryCategory> visible) {
     if (top.isEmpty) {
       return [
-        const SliverToBoxAdapter(
+        SliverToBoxAdapter(
           child: Padding(
-            padding: EdgeInsets.only(top: 40),
-            child: FriendlyState(icon: Icons.newspaper_rounded, title: 'No stories yet', message: 'New stories arrive every hour. Pull down to refresh.'),
+            padding: const EdgeInsets.only(top: 40),
+            child: FriendlyState(icon: Icons.newspaper_rounded, title: tr('No stories yet'), message: tr('New stories arrive every hour. Pull down to refresh.')),
           ),
         ),
       ];
     }
     if (_tab != kTopStories.id) return _categoryContent(context, feed, storyCategoryById(_tab));
+    final tx = StoriesScope.of(context).translations;
 
     // Scam Radar: the newest scam story (when Scams & Security is visible); the
     // hero is the best-ranked story that isn't already on the radar.
@@ -193,20 +202,30 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           child: FadeSlideIn(
             child: ValueListenableBuilder<double>(
               valueListenable: _parallax,
-              builder: (context, p, _) => HeroStoryCard(story: hero, parallax: p, onTap: () => openStory(context, hero)),
+              builder: (context, p, _) => HeroStoryCard(story: tx.card(hero), parallax: p, onTap: () => openStory(context, hero)),
             ),
           ),
         ),
       ),
+      if (tx.lang != 'en' && tx.hasRecentFailure)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Align(alignment: Alignment.centerLeft, child: TranslationNote(status: TrStatus.failed, onRetry: () => setState(() {}))),
+          ),
+        ),
       if (!identical(scam, _noStory)) ...[
         const SliverToBoxAdapter(child: SizedBox(height: 22)),
-        SliverToBoxAdapter(child: FadeSlideIn(index: 1, child: ScamRadarCard(story: scam))),
+        SliverToBoxAdapter(child: FadeSlideIn(index: 1, child: ScamRadarCard(story: tx.card(scam)))),
+      ] else ...[
+        const SliverToBoxAdapter(child: SizedBox(height: 22)),
+        const SliverToBoxAdapter(child: ScamCheckEntryCard()),
       ],
       const SliverToBoxAdapter(child: SizedBox(height: 18)),
       SliverToBoxAdapter(child: FadeSlideIn(index: 2, child: ScamOrNotCard(stories: feed.stories))),
       for (final (c, list) in rails) ...[
         SliverToBoxAdapter(
-          child: SectionTitle(c.label, icon: c.icon, color: c.tint, action: 'See all', onAction: () => _select(c.id)),
+          child: SectionTitle(c.label, icon: c.icon, color: c.tint, action: tr('See all'), onAction: () => _select(c.id)),
         ),
         SliverToBoxAdapter(
           child: SizedBox(
@@ -217,17 +236,17 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               itemCount: list.length,
               separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, i) => RailCard(story: list[i], onTap: () => openStory(context, list[i])),
+              itemBuilder: (context, i) => RailCard(story: tx.card(list[i]), onTap: () => openStory(context, list[i])),
             ),
           ),
         ),
       ],
-      const SliverToBoxAdapter(child: SectionTitle('Latest', icon: Icons.bolt_rounded, color: Color(0xFFFF8255))),
+      SliverToBoxAdapter(child: SectionTitle(tr('Latest'), icon: Icons.bolt_rounded, color: const Color(0xFFFF8255))),
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         sliver: SliverList.builder(
           itemCount: latestAll.length,
-          itemBuilder: (context, i) => _constrain(FadeSlideIn(index: i, child: CompactStoryCard(story: latestAll[i]))),
+          itemBuilder: (context, i) => _constrain(FadeSlideIn(index: i, child: CompactStoryCard(story: tx.card(latestAll[i])))),
         ),
       ),
     ];
@@ -235,12 +254,13 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   List<Widget> _categoryContent(BuildContext context, StoryFeed feed, StoryCategory c) {
     final list = feed.inCategory(c.id);
+    final tx = StoriesScope.of(context).translations;
     if (list.isEmpty) {
       return [
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.only(top: 40),
-            child: FriendlyState(icon: c.icon, title: 'No ${c.label} stories yet', message: 'New stories arrive every hour. Pull down to refresh.'),
+            child: FriendlyState(icon: c.icon, title: '${c.label}: ${tr('No stories yet')}', message: tr('New stories arrive every hour. Pull down to refresh.')),
           ),
         ),
       ];
@@ -251,11 +271,13 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           padding: const EdgeInsets.only(top: 6, bottom: 14),
           child: ValueListenableBuilder<double>(
             valueListenable: _parallax,
-            builder: (context, p, _) => HeroStoryCard(story: list.first, parallax: p, onTap: () => openStory(context, list.first)),
+            builder: (context, p, _) => HeroStoryCard(story: tx.card(list.first), parallax: p, onTap: () => openStory(context, list.first)),
           ),
         ),
       ),
       if (c.id == 'scams-security') ...[
+        const SliverToBoxAdapter(child: ScamCheckEntryCard()),
+        const SliverToBoxAdapter(child: SizedBox(height: 14)),
         SliverToBoxAdapter(child: ScamOrNotCard(stories: feed.stories)),
         const SliverToBoxAdapter(child: SizedBox(height: 14)),
       ],
@@ -263,7 +285,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         sliver: SliverList.builder(
           itemCount: list.length - 1,
-          itemBuilder: (context, i) => _constrain(FadeSlideIn(index: i, child: CompactStoryCard(story: list[i + 1]))),
+          itemBuilder: (context, i) => _constrain(FadeSlideIn(index: i, child: CompactStoryCard(story: tx.card(list[i + 1])))),
         ),
       ),
     ];

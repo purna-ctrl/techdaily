@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_language.dart' show tr;
+
 /// TechDaily categories, in tab order after "Top Stories" (a ranked mix,
 /// never stored). Ids match the backend (`functions/src/stories/categories.ts`)
 /// and the static pages at `/c/<id>/` (same colours: `render/theme.ts`).
@@ -9,15 +11,23 @@ import 'package:flutter/material.dart';
 /// (>= 6:1). Solid chips put ink #0B0B0F text on [color] (>= 4.6:1).
 class StoryCategory {
   final String id;
-  final String label;
+
+  /// English name (ids, URLs and the backend use this); [label] is in the
+  /// reader's language.
+  final String enLabel;
   final IconData icon;
   final Color color;
   final Color tint;
 
-  const StoryCategory(this.id, this.label, this.icon, this.color, this.tint);
+  const StoryCategory(this.id, this.enLabel, this.icon, this.color, this.tint);
+
+  /// Name in the app language (English / Telugu / Hindi).
+  String get label => tr(enLabel);
 
   /// Short label for tight places (rings, chips on small cards).
-  String get shortLabel => switch (id) {
+  String get shortLabel => tr(_shortEn);
+
+  String get _shortEn => switch (id) {
         'scams-security' => 'Scams',
         'phones-gadgets' => 'Phones',
         'chips-hardware' => 'Chips',
@@ -30,7 +40,7 @@ class StoryCategory {
         'health-tech' => 'Health',
         'jobs-skills' => 'Jobs',
         'top-stories' => 'Top',
-        _ => label,
+        _ => enLabel,
       };
 }
 

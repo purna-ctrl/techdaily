@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import '../../core/stories_scope.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/story.dart';
+import '../../screens/v2/scam_check_screen.dart' show ScamCheckButton;
 import '../../services/v2/scam_game.dart';
 import '../v2/story_parts.dart' show openExternal;
 import 'story_image.dart';
 import 'ui.dart';
+import '../../l10n/app_language.dart' show tr;
 
 /// Red glow that breathes (static when motion is off).
 class PulsingGlow extends StatefulWidget {
@@ -80,9 +82,9 @@ class ScamRadarCard extends StatelessWidget {
                   Row(children: [
                     const _RadarDot(),
                     const SizedBox(width: 10),
-                    Text('SCAM RADAR', style: AppTheme.kicker(size: 12.5, color: TD.redTint).copyWith(fontWeight: FontWeight.w800, letterSpacing: 1.4)),
+                    Text(tr('SCAM RADAR'), style: AppTheme.kicker(size: 12.5, color: TD.redTint).copyWith(fontWeight: FontWeight.w800, letterSpacing: 1.4)),
                     const Spacer(),
-                    Text('Live alert', style: AppTheme.kicker(size: 11, color: TD.muted)),
+                    Text(tr('Live alert'), style: AppTheme.kicker(size: 11, color: TD.muted)),
                   ]),
                   const SizedBox(height: 12),
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -106,6 +108,7 @@ class ScamRadarCard extends StatelessWidget {
                   ],
                   const SizedBox(height: 12),
                   Wrap(spacing: 8, runSpacing: 8, children: [
+                    const ScamCheckButton(),
                     FilledButton.icon(
                       key: const ValueKey('radar-1930'),
                       style: FilledButton.styleFrom(backgroundColor: TD.red, foregroundColor: TD.bg, shape: const StadiumBorder(), minimumSize: const Size(0, 42)),
@@ -208,8 +211,8 @@ class _ScamOrNotCardState extends State<ScamOrNotCard> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Semantics(header: true, child: Text('Scam or Not?', style: AppTheme.display(20, color: TD.ink))),
-                    Text(showSummary ? 'Done for today · new messages tomorrow' : 'Daily game · message ${_index + 1} of ${_round.length}',
+                    Semantics(header: true, child: Text(tr('Scam or Not?'), style: AppTheme.display(20, color: TD.ink))),
+                    Text(showSummary ? tr('Done for today · new messages tomorrow') : tr('Daily game · message {i} of {n}', {'i': _index + 1, 'n': _round.length}),
                         style: const TextStyle(fontSize: 12.5, color: TD.muted)),
                   ]),
                 ),
@@ -243,7 +246,7 @@ class _ScamOrNotCardState extends State<ScamOrNotCard> {
                         style: FilledButton.styleFrom(backgroundColor: TD.red, foregroundColor: TD.bg, minimumSize: const Size(0, 50), shape: const StadiumBorder()),
                         onPressed: () => game.answer(m, saysScam: true, round: _round),
                         icon: const Icon(Icons.gpp_bad_rounded),
-                        label: const Text('Scam'),
+                        label: Text(tr('Scam')),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -254,7 +257,7 @@ class _ScamOrNotCardState extends State<ScamOrNotCard> {
                             backgroundColor: const Color(0xFF22C55E), foregroundColor: TD.bg, minimumSize: const Size(0, 50), shape: const StadiumBorder()),
                         onPressed: () => game.answer(m, saysScam: false, round: _round),
                         icon: const Icon(Icons.verified_user_rounded),
-                        label: const Text('Safe'),
+                        label: Text(tr('Safe')),
                       ),
                     ),
                   ])
@@ -373,7 +376,7 @@ class _Explanation extends StatelessWidget {
           Row(children: [
             Icon(right ? Icons.check_circle_rounded : Icons.cancel_rounded, color: color),
             const SizedBox(width: 8),
-            Text(right ? 'You got it!' : 'Not quite', style: AppTheme.display(17, color: color)),
+            Text(right ? tr('You got it!') : tr('Not quite'), style: AppTheme.display(17, color: color)),
           ]),
           const SizedBox(height: 6),
           Text(message.verdict, style: const TextStyle(fontSize: 15, height: 1.45, color: TD.ink)),
@@ -393,13 +396,13 @@ class _Explanation extends StatelessWidget {
               TextButton.icon(
                 onPressed: () => openStorySlug(context, message.storySlug!),
                 icon: const Icon(Icons.newspaper_rounded, size: 16),
-                label: const Text('Read the news story'),
+                label: Text(tr('Read the news story')),
               ),
             FilledButton(
               key: const ValueKey('game-next'),
               style: FilledButton.styleFrom(backgroundColor: TD.ink, foregroundColor: TD.bg, shape: const StadiumBorder(), minimumSize: const Size(0, 40)),
               onPressed: onNext,
-              child: Text(isLast ? 'See my score' : 'Next message'),
+              child: Text(isLast ? tr('See my score') : tr('Next message')),
             ),
           ]),
         ]),
@@ -428,7 +431,7 @@ class _Summary extends StatelessWidget {
             textAlign: TextAlign.center, style: const TextStyle(color: TD.ink, fontSize: 15)),
         const SizedBox(height: 6),
         Text('🔥 $streak-day streak', style: const TextStyle(color: Color(0xFFFFB061), fontWeight: FontWeight.w700)),
-        TextButton(onPressed: onReview, child: const Text('Review answers')),
+        TextButton(onPressed: onReview, child: Text(tr('Review answers'))),
       ]),
     );
   }

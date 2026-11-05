@@ -66,6 +66,11 @@ flutter:
   # Bundles the Material Icons font (icons render as glyphs, not empty boxes).
   uses-material-design: true
 
+  # Telugu + Devanagari (Noto Sans, OFL) for Telugu / Hindi on web. Plain assets,
+  # not `fonts:`, so they load only when those languages are used (FontLoader).
+  assets:
+    - assets/fonts/noto/
+
   # Brand fonts are bundled (not fetched at runtime) so web never flashes a
   # fallback font. Subset to Latin; Indian scripts fall back to Noto.
   fonts:

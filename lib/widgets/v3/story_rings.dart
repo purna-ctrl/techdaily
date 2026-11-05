@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/story.dart';
 import 'story_image.dart';
+import 'language_widgets.dart' show BriefListenButton;
 import 'ui.dart';
+import '../../l10n/app_language.dart' show tr;
 
 /// Stories viewed in the full-screen viewer this session (rings turn grey).
 final ValueNotifier<Set<String>> viewedStoryIds = ValueNotifier<Set<String>>(<String>{});
@@ -29,15 +31,20 @@ class StoryRings extends StatelessWidget {
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
         child: Row(children: [
-          Semantics(header: true, child: Text('Today in ${stories.length}', style: AppTheme.display(20, color: TD.ink))),
+          Semantics(header: true, child: Text(tr('Today in {n}', {'n': stories.length}), style: AppTheme.display(20, color: TD.ink))),
           const SizedBox(width: 8),
-          Text(caughtUp ? '· all caught up' : '· tap to watch', style: const TextStyle(fontSize: 13, color: TD.muted)),
-          const Spacer(),
+          Expanded(
+            child: Text(caughtUp ? tr('· all caught up') : tr('· tap to watch'),
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: TD.muted)),
+          ),
+          const SizedBox(width: 6),
+          BriefListenButton(stories: stories),
+          if (streak > 0) const SizedBox(width: 8),
           if (streak > 0)
             Row(children: [
               const Icon(Icons.local_fire_department_rounded, size: 16, color: Color(0xFFFFB061)),
               const SizedBox(width: 2),
-              Text('$streak day${streak == 1 ? '' : 's'}', style: AppTheme.numeric(12.5, color: const Color(0xFFFFB061))),
+              Text(streak == 1 ? tr('1 day') : tr('{n} days', {'n': streak}), style: AppTheme.numeric(12.5, color: const Color(0xFFFFB061))),
             ]),
         ]),
       ),

@@ -1,3 +1,4 @@
+import '../../l10n/indic_fonts.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
@@ -139,6 +140,7 @@ class AppTheme {
   }) {
     return TextStyle(
       fontFamily: displayFont,
+      fontFamilyFallback: kIndicFallback,
       fontSize: size,
       fontWeight: weight,
       height: height,
@@ -152,6 +154,7 @@ class AppTheme {
   static TextStyle kicker({Color? color, double size = 11}) {
     return TextStyle(
       fontFamily: bodyFont,
+      fontFamilyFallback: kIndicFallback,
       fontSize: size,
       fontWeight: FontWeight.w700,
       letterSpacing: 0.6,
@@ -168,6 +171,7 @@ class AppTheme {
   }) {
     return TextStyle(
       fontFamily: family,
+      fontFamilyFallback: kIndicFallback,
       fontSize: size,
       fontWeight: weight,
       color: color,
@@ -216,6 +220,7 @@ class AppTheme {
 
     TextStyle d(double size, FontWeight w, {double h = 1.15}) => TextStyle(
           fontFamily: displayFont,
+          fontFamilyFallback: kIndicFallback,
           fontSize: size,
           fontWeight: w,
           height: h,
@@ -225,6 +230,7 @@ class AppTheme {
     TextStyle b(double size, FontWeight w, {Color? c, double h = 1.45}) =>
         TextStyle(
           fontFamily: bodyFont,
+          fontFamilyFallback: kIndicFallback,
           fontSize: size,
           fontWeight: w,
           height: h,
@@ -255,6 +261,7 @@ class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: bg,
       fontFamily: bodyFont,
+      fontFamilyFallback: kIndicFallback,
       textTheme: textTheme,
       splashFactory: InkSparkle.splashFactory,
     );

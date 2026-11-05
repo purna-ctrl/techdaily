@@ -9,6 +9,7 @@ import '../../core/constants/story_questions.dart';
 import '../../widgets/v3/story_questions.dart';
 import '../../widgets/v3/story_sections.dart';
 import '../../widgets/v3/ui.dart';
+import '../../l10n/app_language.dart' show tr;
 
 /// Full-screen vertical "Reels": one story per screen. Image on the top 45%,
 /// headline, then the story as swipeable cards (What happened · Does it
@@ -55,7 +56,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
           right: 8,
           child: Row(children: [
             IconButton(
-              tooltip: 'Back',
+              tooltip: tr('Back'),
               style: IconButton.styleFrom(backgroundColor: const Color(0x990B0B0F)),
               onPressed: () => Navigator.of(context).maybePop(),
               icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
@@ -67,7 +68,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.play_circle_fill_rounded, size: 16, color: Color(0xFFFF8255)),
                 const SizedBox(width: 6),
-                Text('Reels', style: AppTheme.display(14, color: Colors.white)),
+                Text(tr('Reels'), style: AppTheme.display(14, color: Colors.white)),
                 const SizedBox(width: 8),
                 Text('${_index + 1}/${widget.stories.length}', style: AppTheme.numeric(12.5, color: Colors.white70)),
               ]),
@@ -99,9 +100,9 @@ class _ReelState extends State<_Reel> {
   }
 
   List<(String, IconData, Widget, bool)> _sections(Story s, Color c) => [
-        if (s.display.tldr.isNotEmpty) (kTldrLabel, Icons.short_text_rounded, JargonText(s.display.tldr, accent: c), false),
+        if (s.display.tldr.isNotEmpty) (tr(kTldrLabel), Icons.short_text_rounded, JargonText(s.display.tldr, accent: c), false),
         for (final x in storySections(s, compact: true)) (x.title, x.icon, x.body, x.scam),
-        if (s.faq.isNotEmpty) (kAskLabel, Icons.forum_rounded, AskAboutThis(story: s, compact: true), false),
+        if (s.faq.isNotEmpty) (tr(kAskLabel), Icons.forum_rounded, AskAboutThis(story: s, compact: true), false),
       ];
 
   @override
@@ -134,7 +135,7 @@ class _ReelState extends State<_Reel> {
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     const Icon(Icons.gpp_maybe_rounded, size: 15, color: TD.bg),
                     const SizedBox(width: 4),
-                    Text('SCAM ALERT', style: AppTheme.kicker(size: 11, color: TD.bg).copyWith(fontWeight: FontWeight.w900)),
+                    Text(tr('SCAM ALERT'), style: AppTheme.kicker(size: 11, color: TD.bg).copyWith(fontWeight: FontWeight.w900)),
                   ]),
                 ),
               ),

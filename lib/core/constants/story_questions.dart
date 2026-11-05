@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_language.dart' show tr;
+
 /// Per-category question sets for the story page. Mirrors
 /// `functions/src/stories/questions.ts` (a backend test checks the labels
 /// match). Stored keys never change (whatHappened / affectsWho / whatToDo /
@@ -7,9 +9,13 @@ import 'package:flutter/material.dart';
 enum ListStyle { steps, bullets, fact }
 
 class StoryQuestion {
-  final String label;
+  /// English question (matches the backend's questions.ts).
+  final String enLabel;
   final IconData icon;
-  const StoryQuestion(this.label, this.icon);
+  const StoryQuestion(this.enLabel, this.icon);
+
+  /// The question in the app language.
+  String get label => tr(enLabel);
 }
 
 class StoryQuestionSet {

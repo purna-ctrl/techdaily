@@ -124,7 +124,8 @@ class SavedStoriesController extends ChangeNotifier {
   }
 
   /// Saves or un-saves [story]. Returns the new saved state.
-  Future<bool> toggle(Story story) async {
+  Future<bool> toggle(Story shown) async {
+    final story = shown.original; // never save a translated copy
     final wasSaved = isSaved(story.id);
     if (wasSaved) {
       _stories.removeWhere((s) => s.id == story.id);

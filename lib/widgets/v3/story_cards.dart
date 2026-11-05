@@ -7,6 +7,7 @@ import '../../models/story.dart';
 import 'story_image.dart';
 import 'story_sections.dart' show toggleSave;
 import 'ui.dart';
+import '../../l10n/app_language.dart' show tr;
 
 String metaLine(Story s) {
   final names = s.sourceNames;
@@ -31,7 +32,7 @@ class SaveIconButton extends StatelessWidget {
         final saved = scope.saved.isSaved(story.id);
         final btn = IconButton(
           key: ValueKey('save-${story.id}'),
-          tooltip: saved ? 'Remove from saved' : 'Save story',
+          tooltip: saved ? tr('Remove from saved') : tr('Save story'),
           onPressed: () => toggleSave(context, story),
           icon: Icon(saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: saved ? story.categoryInfo.tint : TD.ink),
         );

@@ -10,6 +10,7 @@ import '../../widgets/v3/story_image.dart';
 import '../../widgets/v3/story_rings.dart' show markStoryViewed;
 import '../../widgets/v3/ui.dart';
 import 'reels_screen.dart';
+import '../../l10n/app_language.dart' show tr;
 
 /// Full-screen "Today in 5" viewer: progress bars, auto-advance, tap
 /// left/right, hold to pause, swipe up for the full story. After the last
@@ -161,12 +162,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> with SingleTicker
               ]),
               const SizedBox(height: 8),
               Row(children: [
-                Text('Today in $_count', style: AppTheme.display(15, color: Colors.white)),
+                Text(tr('Today in {n}', {'n': _count}), style: AppTheme.display(15, color: Colors.white)),
                 const SizedBox(width: 8),
                 Text('${_index + 1}/$_count', style: AppTheme.numeric(13, color: Colors.white70)),
                 const Spacer(),
                 IconButton(
-                  tooltip: 'Close',
+                  tooltip: tr('Close'),
                   style: IconButton.styleFrom(backgroundColor: const Color(0x660B0B0F)),
                   onPressed: () => Navigator.of(context).maybePop(),
                   icon: const Icon(Icons.close_rounded, color: Colors.white),
@@ -242,7 +243,7 @@ class _StoryPage extends StatelessWidget {
             Center(
               child: Semantics(
                 button: true,
-                label: 'Open the full story',
+                label: tr('Open the full story'),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(999),
                   onTap: onSwipeUp,
@@ -250,7 +251,7 @@ class _StoryPage extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       const _Bounce(child: Icon(Icons.keyboard_arrow_up_rounded, color: Colors.white, size: 28)),
-                      Text('Swipe up for the full story', style: AppTheme.kicker(size: 11.5, color: Colors.white)),
+                      Text(tr('Swipe up for the full story'), style: AppTheme.kicker(size: 11.5, color: Colors.white)),
                     ]),
                   ),
                 ),
@@ -345,7 +346,7 @@ class _CaughtUpState extends State<_CaughtUp> with SingleTickerProviderStateMixi
                 child: const Icon(Icons.check_rounded, color: Colors.white, size: 60),
               ),
               const SizedBox(height: 24),
-              Semantics(header: true, child: Text('You’re all caught up', textAlign: TextAlign.center, style: AppTheme.display(32, color: TD.ink))),
+              Semantics(header: true, child: Text(tr('You’re all caught up'), textAlign: TextAlign.center, style: AppTheme.display(32, color: TD.ink))),
               const SizedBox(height: 10),
               Text('That’s today’s ${widget.stories.length} stories that matter, in simple words.',
                   textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, height: 1.5, color: TD.muted)),
@@ -372,10 +373,10 @@ class _CaughtUpState extends State<_CaughtUp> with SingleTickerProviderStateMixi
                   Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => ReelsScreen(stories: widget.stories)));
                 },
                 icon: const Icon(Icons.play_circle_fill_rounded),
-                label: const Text('Keep reading in Reels'),
+                label: Text(tr('Keep reading in Reels')),
               ),
               const SizedBox(height: 10),
-              TextButton(onPressed: widget.onClose, child: const Text('Back to home')),
+              TextButton(onPressed: widget.onClose, child: Text(tr('Back to home'))),
             ]),
           ),
         ),

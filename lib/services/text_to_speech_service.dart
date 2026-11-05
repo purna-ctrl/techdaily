@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
@@ -91,6 +92,47 @@ class FlutterTtsService extends ChangeNotifier implements ITextToSpeechService {
       _state = TtsPlaybackState.playing;
       notifyListeners();
     }
+  }
+
+  /// Picks the device voice for [bcp47] (e.g. `te-IN`, `hi-IN`, `en-IN`) using
+  /// the built-in engine (Android TTS / the browser's Web Speech API). Returns
+  /// false when this device has no voice for that language; the caller then
+  /// reads English instead. Free — no cloud voices.
+  Future<bool> useLanguage(String bcp47) async {
+    final tts = _flutterTts;
+    if (!_isAvailable || tts == null) return bcp47.startsWith('en');
+    final want = bcp47.toLowerCase().replaceAll('_', '-');
+    final base = want.split('-').first;
+    var ok = false;
+    try {
+      if (!kIsWeb) {
+        final r = await tts.isLanguageAvailable(bcp47);
+        ok = r == true || r == 1;
+      }
+      if (!ok) {
+        final langs = await tts.getLanguages;
+        if (langs is List) {
+          final all = langs.map((e) => '$e'.toLowerCase().replaceAll('_', '-'));
+          ok = all.any((l) => l == want || l == base || l.startsWith('$base-'));
+        }
+      }
+      if (!ok && kIsWeb && base != 'en') {
+        // Some browsers list voices late; look at the voice list too.
+        final voices = await tts.getVoices;
+        if (voices is List) {
+          ok = voices.any((v) => v is Map && '${v['locale'] ?? v['lang'] ?? ''}'.toLowerCase().replaceAll('_', '-').startsWith(base));
+        }
+      }
+      if (ok) await tts.setLanguage(bcp47);
+    } catch (_) {
+      ok = false;
+    }
+    if (!ok) {
+      try {
+        await tts.setLanguage('en-IN');
+      } catch (_) {}
+    }
+    return ok;
   }
 
   @override

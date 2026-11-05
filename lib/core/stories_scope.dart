@@ -6,6 +6,7 @@ import '../repositories/story_repository.dart';
 import '../services/v2/daily_streak.dart';
 import '../services/v2/newsletter_service.dart';
 import '../services/v2/scam_game.dart';
+import '../services/v2/story_translator.dart';
 import '../services/v2/saved_stories.dart';
 import '../services/v2/topic_prefs.dart';
 
@@ -22,6 +23,9 @@ class StoriesScope extends InheritedWidget {
   final ScamGameController scamGame;
   final CaughtUpStreak caughtUp;
 
+  /// Telugu / Hindi story translation (null in older tests: stories stay English).
+  final StoryTranslator? translator;
+
   const StoriesScope({
     super.key,
     required this.stories,
@@ -31,8 +35,12 @@ class StoriesScope extends InheritedWidget {
     required this.auth,
     required this.scamGame,
     required this.caughtUp,
+    this.translator,
     required super.child,
   });
+
+  /// The story translator, or one that always shows English.
+  StoryTranslator get translations => translator ?? _englishOnly;
 
   static StoriesScope of(BuildContext context) {
     final s = context.dependOnInheritedWidgetOfExactType<StoriesScope>();
@@ -42,20 +50,22 @@ class StoriesScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(StoriesScope old) =>
-      stories != old.stories || saved != old.saved || topics != old.topics || newsletter != old.newsletter || auth != old.auth || scamGame != old.scamGame || caughtUp != old.caughtUp;
+      stories != old.stories || saved != old.saved || topics != old.topics || newsletter != old.newsletter || auth != old.auth || scamGame != old.scamGame || caughtUp != old.caughtUp || translator != old.translator;
 }
+
+final StoryTranslator _englishOnly = StoryTranslator();
 
 /// In-app route for a story. `/story/<slug>/` (no `/app`) is the static,
 /// pre-rendered page that Hosting serves; the app uses `/app/story/<slug>`.
 String storyRoutePath(String slug) => '/app/story/${Uri.encodeComponent(slug)}';
 
 Future<void> openStory(BuildContext context, Story story) =>
-    Navigator.of(context).pushNamed(storyRoutePath(story.slug), arguments: story);
+    Navigator.of(context).pushNamed(storyRoutePath(story.slug), arguments: story.original);
 
 Future<void> openStorySlug(BuildContext context, String slug) =>
     Navigator.of(context).pushNamed(storyRoutePath(slug));
 
-enum AppRouteKind { home, story, category, saved, search, settings, newsletter, about, legacyArticle, unknown }
+enum AppRouteKind { home, story, category, saved, search, settings, newsletter, about, scamCheck, legacyArticle, unknown }
 
 /// Parsed app route. Accepts `/app/...` and bare paths (`/story/x`, `/saved`).
 class AppRoute {
@@ -88,6 +98,8 @@ class AppRoute {
         return AppRoute(AppRouteKind.newsletter, q['email'], q);
       case 'about':
         return const AppRoute(AppRouteKind.about);
+      case 'scam-check':
+        return AppRoute(AppRouteKind.scamCheck, q['text'], q);
     }
     return const AppRoute(AppRouteKind.unknown);
   }

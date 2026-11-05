@@ -14,6 +14,8 @@ import 'core/constants/app_constants.dart';
 import 'core/stories_scope.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
+import 'l10n/app_language.dart';
+import 'l10n/indic_fonts.dart';
 import 'models/article.dart';
 import 'models/story.dart';
 import 'repositories/article_repository.dart';
@@ -22,6 +24,7 @@ import 'repositories/firestore_article_repository.dart';
 import 'repositories/story_repository.dart';
 import 'screens/article_screen.dart';
 import 'screens/v2/home_feed_screen.dart';
+import 'screens/v2/scam_check_screen.dart';
 import 'screens/v2/saved_stories_screen.dart';
 import 'screens/v2/settings_screen.dart';
 import 'screens/v2/story_detail_screen.dart';
@@ -31,6 +34,7 @@ import 'services/local_article_service.dart';
 import 'services/v2/daily_streak.dart';
 import 'services/v2/newsletter_service.dart';
 import 'services/v2/scam_game.dart';
+import 'services/v2/story_translator.dart';
 import 'services/v2/sample_stories.dart';
 import 'services/v2/saved_stories.dart';
 import 'services/v2/topic_prefs.dart';
@@ -135,6 +139,9 @@ class TechDailyApp extends StatefulWidget {
   final TopicPrefs? topics;
   final NewsletterService? newsletter;
 
+  /// Story translation (Telugu / Hindi); tests pass a fake.
+  final StoryTranslator? translator;
+
   const TechDailyApp({
     super.key,
     required this.stories,
@@ -143,6 +150,7 @@ class TechDailyApp extends StatefulWidget {
     this.saved,
     this.topics,
     this.newsletter,
+    this.translator,
   });
 
   @override
@@ -158,11 +166,34 @@ class _TechDailyAppState extends State<TechDailyApp> {
   final ScamGameController _scamGame = ScamGameController();
   final CaughtUpStreak _caughtUp = CaughtUpStreak();
   late final ArticleRepository _legacy = widget.legacyArticles ?? LocalArticleRepository(articleService: LocalArticleService());
+  late final StoryTranslator _translator = widget.translator ?? StoryTranslator();
   StreamSubscription<dynamic>? _authSub;
+  AppLang _lang = appLanguage.value;
+
+  void _onLanguage() {
+    final l = appLanguage.value;
+    _translator.setLanguage(l.code);
+    if (l != AppLang.en) unawaited(ensureIndicFonts());
+    if (l != _lang) {
+      _lang = l;
+      // Const widgets and plain getters (category names) read the language
+      // directly, so repaint everything once; navigation and state are kept.
+      WidgetsBinding.instance.addPostFrameCallback((_) => rebuildAllForLanguage());
+      if (mounted) setState(() {});
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    appLanguage.addListener(_onLanguage);
+    _translator.setLanguage(appLanguage.value.code);
+    unawaited(_translator.init());
+    unawaited(appLanguage.load().then((_) {
+      // `?lang=te|hi|en` on any web link picks the language (shareable links, checks).
+      final q = kIsWeb ? Uri.base.queryParameters['lang'] : null;
+      if (q != null && AppLang.values.any((l) => l.code == q)) unawaited(appLanguage.set(AppLang.fromCode(q)));
+    }));
     if (widget.topics == null) unawaited(_topics.load());
     unawaited(_scamGame.load());
     unawaited(_caughtUp.load());
@@ -172,6 +203,8 @@ class _TechDailyAppState extends State<TechDailyApp> {
 
   @override
   void dispose() {
+    appLanguage.removeListener(_onLanguage);
+    if (widget.translator == null) _translator.dispose();
     _authSub?.cancel();
     _themeModeNotifier.dispose();
     _scamGame.dispose();
@@ -206,6 +239,8 @@ class _TechDailyAppState extends State<TechDailyApp> {
         return MaterialPageRoute(settings: settings, builder: (_) => NewsletterScreen(email: r.param));
       case AppRouteKind.about:
         return MaterialPageRoute(settings: settings, builder: (_) => const AboutScreen());
+      case AppRouteKind.scamCheck:
+        return MaterialPageRoute(settings: settings, builder: (_) => ScamCheckScreen(initialText: r.param));
       case AppRouteKind.legacyArticle:
         return MaterialPageRoute(
           settings: settings,
@@ -226,7 +261,7 @@ class _TechDailyAppState extends State<TechDailyApp> {
     final r = AppRoute.parse(name);
     final route = _routeFor(RouteSettings(name: name));
     if (route == null || r.kind == AppRouteKind.home) return [_shell(const RouteSettings(name: '/'))];
-    final overShell = {AppRouteKind.story, AppRouteKind.newsletter, AppRouteKind.about, AppRouteKind.legacyArticle};
+    final overShell = {AppRouteKind.story, AppRouteKind.newsletter, AppRouteKind.about, AppRouteKind.scamCheck, AppRouteKind.legacyArticle};
     return overShell.contains(r.kind) ? [_shell(const RouteSettings(name: '/')), route] : [route];
   }
 
@@ -240,6 +275,7 @@ class _TechDailyAppState extends State<TechDailyApp> {
       auth: widget.authRepository,
       scamGame: _scamGame,
       caughtUp: _caughtUp,
+      translator: _translator,
       child: AppScope(
         repository: _legacy,
         authRepository: widget.authRepository,
@@ -307,7 +343,7 @@ class _ArticleRouteScreenState extends State<ArticleRouteScreen> {
         return Scaffold(
           appBar: AppBar(
             leading: IconButton(
-              tooltip: 'Home',
+              tooltip: tr('Home'),
               icon: const Icon(Icons.arrow_back_rounded),
               onPressed: () {
                 final nav = Navigator.of(context);
@@ -319,9 +355,9 @@ class _ArticleRouteScreenState extends State<ArticleRouteScreen> {
               ? const Center(child: CircularProgressIndicator())
               : FriendlyState(
                   icon: Icons.article_outlined,
-                  title: 'Story not found',
+                  title: tr('Story not found'),
                   message: 'This older link has moved. Here’s what’s new instead.',
-                  actionLabel: 'Go to home',
+                  actionLabel: tr('Go to home'),
                   actionIcon: Icons.home_rounded,
                   onAction: () => Navigator.of(context).pushReplacementNamed('/'),
                 ),
@@ -375,11 +411,11 @@ class _TechDailyMainShellState extends State<TechDailyMainShell> {
             _visited.add(i);
           }),
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
-            NavigationDestination(icon: Icon(Icons.search_rounded), label: 'Search'),
-            NavigationDestination(icon: Icon(Icons.bookmark_border_rounded), selectedIcon: Icon(Icons.bookmark_rounded), label: 'Saved'),
-            NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings_rounded), label: 'Settings'),
+          destinations: [
+            NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home_rounded), label: tr('Home')),
+            NavigationDestination(icon: const Icon(Icons.search_rounded), label: tr('Search')),
+            NavigationDestination(icon: const Icon(Icons.bookmark_border_rounded), selectedIcon: const Icon(Icons.bookmark_rounded), label: tr('Saved')),
+            NavigationDestination(icon: const Icon(Icons.settings_outlined), selectedIcon: const Icon(Icons.settings_rounded), label: tr('Settings')),
           ],
         ),
       ),
