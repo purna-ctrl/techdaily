@@ -116,7 +116,7 @@ test('/translate serves repeat items from cache (no second Gemini call)', async 
   const store = new Map();
   const kvEnv = { ...env, TR: { get: async (k) => (store.has(k) ? JSON.parse(store.get(k)) : null), put: async (k, v) => store.set(k, v) } };
   const calls = [];
-  const f = reply({ items: [{ id: 's1', fields: { headline: 'తెలుగు శీర్షిక' } }] }, calls);
+  const f = reply((req) => JSON.stringify({ items: JSON.parse(req.contents[0].parts[0].text).items.map((it) => ({ id: it.id, fields: { headline: 'తెలుగు శీర్షిక' } })) }), calls);
   const req = () => post('/translate', { lang: 'te', items: [{ id: 's1', fields: { headline: 'English headline' } }] }, { ip: '6.6.6.6' });
   const a = await (await handle(req(), kvEnv, f)).json();
   const b = await (await handle(req(), kvEnv, f)).json();
@@ -158,4 +158,21 @@ test('busy Gemini: retries, then answers from the fallback model', async () => {
   const res = await handle(post('/scam', { text: SBI }, { ip: '7.7.7.7' }), env, f);
   assert.equal(res.status, 200);
   assert.deepEqual(models, ['gemini-flash-lite-latest', 'gemini-flash-lite-latest', 'gemini-flash-latest']);
+});
+
+test('/translate splits a long story into small parallel calls and merges the parts', async () => {
+  _resetRateLimit();
+  const calls = [];
+  const f = reply((req) => {
+    const items = JSON.parse(req.contents[0].parts[0].text).items;
+    return JSON.stringify({ items: items.map((it) => ({ id: it.id, fields: Object.fromEntries(Object.entries(it.fields).map(([k, v]) => [k, Array.isArray(v) ? v.map((x) => `T:${x}`) : `T:${v}`])) })) });
+  }, calls);
+  const fields = { headline: 'H', tldr: 't'.repeat(500), whatHappened: 'w'.repeat(900), affectsWho: 'a'.repeat(700), whatToDo: ['one', 'two'], whatItMeans: 'm'.repeat(800) };
+  const res = await handle(post('/translate', { lang: 'te', items: [{ id: 'full-1', fields }] }, { ip: '9.1.1.1' }), env, f);
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.ok(calls.length >= 3, `expected several calls, got ${calls.length}`);
+  assert.equal(body.items[0].fields.whatHappened, `T:${'w'.repeat(900)}`);
+  assert.deepEqual(body.items[0].fields.whatToDo, ['T:one', 'T:two']);
+  assert.equal(body.missing, 0);
 });

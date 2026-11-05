@@ -47,6 +47,10 @@ logged.**
 `{"lang": "te"|"hi", "items": [{"id", "fields": {name: string | string[]}}]}` (≤12 items,
 ≤9000 characters) → `{"lang", "items": [{"id", "fields"}], "cached", "missing"}`.
 
+The Worker splits the work into small Gemini calls (~1,200 characters, 2 at a time, 25 s each):
+long Telugu / Hindi answers from one big call often timed out or got "high demand" on the free tier.
+Whatever comes back is cached, so a partly failed batch only re-asks for the rest next time.
+
 Field names and shapes come back unchanged (lists keep their length); brand names, numbers and tech
 words (UPI, 5G, OTP, app) stay in English. Each item is cached by `lang + id + SHA-256(fields)` in the
 Cloudflare Cache API (works on custom domains) **and** the `TR` KV namespace (works on
