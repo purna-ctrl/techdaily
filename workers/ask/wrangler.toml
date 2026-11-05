@@ -1,4 +1,4 @@
-# TechDaily "Ask your own question" Worker. Not deployed by CI.
+# TechDaily AI Worker (/ask, /scam, /translate). Not deployed by CI.
 #   npx wrangler deploy                      (from workers/ask/)
 #   npx wrangler secret put GEMINI_API_KEY   (paste the key; never commit it)
 name = "techdaily-ask"
@@ -8,9 +8,17 @@ compatibility_date = "2026-10-01"
 [vars]
 # Extra allowed origins, comma-separated (techdaily-prod.web.app is always allowed).
 ALLOWED_ORIGINS = ""
-# Questions per IP per minute.
+# Requests per IP per minute, per route.
 RATE_LIMIT = "8"
+SCAM_RATE_LIMIT = "6"
+TRANSLATE_RATE_LIMIT = "30"
 GEMINI_MODEL = "gemini-flash-lite-latest"
+
+# Translation cache shared by all Cloudflare locations (the Cache API alone is a no-op on
+# *.workers.dev). Free plan: 1,000 writes/day — each story is written once per language.
+[[kv_namespaces]]
+binding = "TR"
+id = "2ce77ef0e7064fc4ba5c976baf5867ab"
 
 # Optional: a KV namespace makes the rate limit shared across Cloudflare isolates.
 #   npx wrangler kv namespace create RL   -> paste the id below and uncomment.

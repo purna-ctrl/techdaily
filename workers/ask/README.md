@@ -1,48 +1,69 @@
 # techdaily-ask (Cloudflare Worker)
 
-Answers the app's **"Ask your own question"** box for a story, using Gemini, **restricted to the
-story context the app sends** (headline, the story's sections, key numbers, FAQ, source names). If
-the story doesn't cover a question, it says so and the app offers the sources.
+TechDaily's AI Worker. Three routes, one Gemini key (Worker secret `GEMINI_API_KEY`), free plans only.
 
-Not deployed automatically. Free Cloudflare Workers plan is enough.
+| Route | What it does | Limit per IP |
+|---|---|---|
+| `POST /ask` | "Ask your own question" about a story — answers **only** from the story context the app sends | `RATE_LIMIT` (8/min) |
+| `POST /scam` | "Is this a scam?" — checks one pasted SMS / WhatsApp / email | `SCAM_RATE_LIMIT` (6/min) |
+| `POST /translate` | Story text into simple Telugu / Hindi, cached per story | `TRANSLATE_RATE_LIMIT` (30/min) |
+
+CORS allows `https://techdaily-prod.web.app` (+ `ALLOWED_ORIGINS`). Rate limits are in-memory per
+isolate; bind a KV namespace as `RL` to share them across isolates.
+
+When Gemini is busy (429 / 5xx / 15 s timeout) each call retries once, then tries
+`GEMINI_FALLBACK_MODEL` (default `gemini-flash-latest`). Errors return `{error, code}` (code like
+`gemini 503,503,504 timeout`); the app then falls back on the device.
 
 ## Deploy
 
 ```bash
 cd workers/ask
-npx wrangler login
-npx wrangler secret put GEMINI_API_KEY     # Worker secret, never in code or wrangler.toml
-npx wrangler deploy                        # prints https://techdaily-ask.<account>.workers.dev
+CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... npx wrangler@4 deploy   # keeps the GEMINI_API_KEY secret
+npx wrangler secret put GEMINI_API_KEY                                    # only the first time
 ```
 
-Then point the app at it — either edit `kAskEndpoint` in `lib/core/config/app_config.dart` or build with
+The app points at it through `kAskEndpoint` in `lib/core/config/app_config.dart`
+(`--dart-define=ASK_ENDPOINT=...`).
 
-```bash
-flutter build web --release --dart-define=ASK_ENDPOINT=https://techdaily-ask.<account>.workers.dev/ask
-```
+## Contracts
 
-While `ASK_ENDPOINT` is empty (the default) the app answers on the device from the story's FAQ, the
-jargon dictionary and its sections.
+### `/ask`
+`{"slug", "question" (≤300), "story": {headline, category, tldr, whatHappened, affectsWho, whatToDo[],
+goodToKnow, whatItMeans, keyNumbers[], faq[], scam?, sources[]}}` → `{"answer"}`.
 
-## Contract
+### `/scam`
+`{"text" (cut at 2000 chars), "sender"? (≤80), "lang": "en"|"te"|"hi"}` →
+`{"verdict": "scam"|"suspicious"|"safe", "summary", "reasons": [2-4], "actions": [≤4], "lang"}`.
 
-`POST /ask` with JSON `{"slug": "...", "question": "...", "story": {headline, category, tldr,
-whatHappened, affectsWho, whatToDo[], goodToKnow, whatItMeans, keyNumbers[], faq[], scam?, sources[]}}`
-→ `200 {"answer": "..."}`.
+The check runs in English with JSON output (shape enforced by `cleanVerdict`), then — for te / hi —
+one translation call. If only the translation fails, the English verdict comes back with
+`"lang": "en", "requestedLang": "te"` and the app shows a "Showing English" note. Actions only use
+real Indian channels: Chakshu on sancharsaathi.gov.in (fraud SMS/calls/WhatsApp), 1909 (spam
+marketing SMS), 1930 / cybercrime.gov.in (money lost or OTP shared). **Messages are never stored or
+logged.**
+
+### `/translate`
+`{"lang": "te"|"hi", "items": [{"id", "fields": {name: string | string[]}}]}` (≤12 items,
+≤9000 characters) → `{"lang", "items": [{"id", "fields"}], "cached", "missing"}`.
+
+Field names and shapes come back unchanged (lists keep their length); brand names, numbers and tech
+words (UPI, 5G, OTP, app) stay in English. Each item is cached by `lang + id + SHA-256(fields)` in the
+Cloudflare Cache API (works on custom domains) **and** the `TR` KV namespace (works on
+`*.workers.dev`; 30-day TTL; free plan 1,000 writes/day), so a story is translated once per language
+and every reader after that gets the cached copy. The app sends its own cache key
+(`lang|storyId|card|full|hash`) as the item id.
 
 | Status | When |
 |---|---|
-| 400 | invalid JSON, empty question, question > 300 characters, no story context |
-| 403 | browser Origin not allowed (CORS allows `https://techdaily-prod.web.app` + `ALLOWED_ORIGINS`) |
-| 413 | body > 20 kB |
-| 429 | more than `RATE_LIMIT` (default 8) questions per IP per minute |
-| 502 / 503 | Gemini failed / `GEMINI_API_KEY` not set — the app then answers on the device |
-
-Rate limiting is in-memory per isolate; bind a KV namespace as `RL` (see `wrangler.toml`) to share
-it across isolates.
+| 400 | invalid JSON / missing or too long input / bad lang |
+| 403 | browser Origin not allowed |
+| 413 | body too large |
+| 429 | over the route's per-minute limit |
+| 502 / 503 | Gemini failed / `GEMINI_API_KEY` not set — the app falls back on the device |
 
 ## Test
 
 ```bash
-cd workers/ask && npm test
+cd workers/ask && npm test     # node --test, no network
 ```
