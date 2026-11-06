@@ -16,6 +16,10 @@ abstract class StoryRepository {
   /// A single story by its URL slug (falls back to the database for older stories).
   Future<Story?> getBySlug(String slug);
 
+  /// The story from the already-loaded feed, without waiting (null if the
+  /// feed is not loaded yet or the story is not in it).
+  Story? cachedBySlug(String slug) => null;
+
   /// Stories matching [query] (client-side over the loaded feed).
   Future<List<Story>> search(String query) async {
     final feed = await loadFeed();
@@ -62,7 +66,9 @@ class HostedStoryRepository extends StoryRepository {
       final uri = feedUri.replace(queryParameters: {'t': (DateTime.now().millisecondsSinceEpoch ~/ 300000).toString()});
       final res = await _http.get(uri).timeout(const Duration(seconds: 12));
       if (res.statusCode == 200 && res.body.trimLeft().startsWith('{')) {
-        final feed = StoryFeed.fromJson(jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
+        // ~430 KB of JSON: parsed on a background isolate on Android so the
+        // UI thread never stalls (web has no isolates; compute runs inline).
+        final feed = kIsWeb ? parseFeedBytes(res.bodyBytes) : await compute(parseFeedBytes, res.bodyBytes);
         if (feed.stories.isNotEmpty) return feed;
       }
     } catch (e) {
@@ -88,6 +94,9 @@ class HostedStoryRepository extends StoryRepository {
   }
 
   @override
+  Story? cachedBySlug(String slug) => _cache?.bySlug(slug);
+
+  @override
   Future<Story?> getBySlug(String slug) async {
     final feed = await loadFeed();
     final hit = feed.bySlug(slug);
@@ -100,6 +109,9 @@ class HostedStoryRepository extends StoryRepository {
   }
 }
 
+/// Decodes `/data/feed.json` bytes (top-level so `compute` can run it).
+StoryFeed parseFeedBytes(Uint8List bytes) => StoryFeed.fromJson(jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>);
+
 /// Fixed in-memory stories (tests, `TECHDAILY_DATA_SOURCE=local` demos).
 class InMemoryStoryRepository extends StoryRepository {
   final StoryFeed feed;
@@ -111,6 +123,9 @@ class InMemoryStoryRepository extends StoryRepository {
     loads++;
     return feed;
   }
+
+  @override
+  Story? cachedBySlug(String slug) => feed.bySlug(slug);
 
   @override
   Future<Story?> getBySlug(String slug) async => feed.bySlug(slug);

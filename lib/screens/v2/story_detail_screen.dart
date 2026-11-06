@@ -34,7 +34,9 @@ class StoryDetailScreen extends StatelessWidget {
     final cat = s.categoryInfo;
     final pad = MediaQuery.paddingOf(context);
     final d = s.display;
-    final words = jargonIn([d.tldr, d.whatHappened, d.affectsWho, d.whatItMeans, ...d.whatToDo, d.goodToKnow, if (s.scam != null) s.scam!.howItWorks]);
+    // Worked out only when the jargon chips scroll into view (and once per story).
+    List<JargonEntry> words() => _words[s] ??=
+        jargonIn([d.tldr, d.whatHappened, d.affectsWho, d.whatItMeans, ...d.whatToDo, d.goodToKnow, if (s.scam != null) s.scam!.howItWorks]);
     final sections = storySections(s);
     // Room below the content for the floating action bar (~68 px) + its margin + the safe area.
     final bottomRoom = 68 + 10 + pad.bottom + 28;
@@ -127,8 +129,10 @@ class StoryDetailScreen extends StatelessWidget {
               ]),
             ),
           ),
-          SliverToBoxAdapter(
-            child: constrained(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Lazy list: only the sections on screen are laid out on the first
+          // frame, so the page appears at once and the rest builds as you scroll.
+          SliverList(
+            delegate: SliverChildListDelegate([
               if (tx.lang != 'en')
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
@@ -154,10 +158,12 @@ class StoryDetailScreen extends StatelessWidget {
                 color: cat.color,
                 child: AskAboutThis(story: s, onOpenSources: () => showSourcesSheet(context, s)),
               ),
-              if (words.isNotEmpty) ...[
-                const SizedBox(height: 18),
-                JargonChips(entries: words, accent: cat.tint),
-              ],
+              Builder(builder: (context) {
+                final w = words();
+                return w.isEmpty
+                    ? const SizedBox.shrink()
+                    : Padding(padding: const EdgeInsets.only(top: 18), child: JargonChips(entries: w, accent: cat.tint));
+              }),
               SectionCard(
                 title: s.sources.length > 1 ? tr('Read the originals') : tr('Read the original'),
                 icon: Icons.link_rounded,
@@ -174,7 +180,7 @@ class StoryDetailScreen extends StatelessWidget {
               const SizedBox(height: 22),
               const NewsletterSignup(source: 'app-story'),
               SizedBox(height: bottomRoom),
-            ])),
+            ].map((w) => w is SizedBox ? constrained(w) : constrained(Align(alignment: Alignment.centerLeft, child: w))).toList()),
           ),
         ]),
         Positioned(
@@ -196,6 +202,8 @@ class StoryDetailScreen extends StatelessWidget {
   }
 
   static String storyCategoryLabel(Story s) => s.categoryInfo.label;
+
+  static final Expando<List<JargonEntry>> _words = Expando('storyJargon');
 }
 
 /// Loads a story by slug for deep links (`/app/story/<slug>`, `/story/<slug>`).
@@ -210,15 +218,23 @@ class StoryRouteScreen extends StatefulWidget {
 
 class _StoryRouteScreenState extends State<StoryRouteScreen> {
   Future<Story?>? _future;
+  Story? _cached;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _future ??= widget.initial != null ? Future.value(widget.initial) : StoriesScope.of(context).stories.getBySlug(widget.slug);
+    if (widget.initial != null || _future != null) return;
+    final repo = StoriesScope.of(context).stories;
+    _cached = repo.cachedBySlug(widget.slug);
+    if (_cached == null) _future = repo.getBySlug(widget.slug);
   }
 
   @override
   Widget build(BuildContext context) {
+    // From the feed (or an already-loaded feed) the story is on screen in the
+    // very first frame; only cold deep links wait for the network.
+    final ready = widget.initial ?? _cached;
+    if (ready != null) return StoryDetailScreen(story: ready);
     return FutureBuilder<Story?>(
       future: _future,
       builder: (context, snap) {

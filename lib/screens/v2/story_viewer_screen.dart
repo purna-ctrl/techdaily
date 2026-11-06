@@ -24,8 +24,8 @@ class StoryViewerScreen extends StatefulWidget {
   static Future<void> open(BuildContext context, List<Story> stories, int index) {
     return Navigator.of(context).push(PageRouteBuilder<void>(
       opaque: true,
-      transitionDuration: const Duration(milliseconds: 320),
-      reverseTransitionDuration: const Duration(milliseconds: 240),
+      transitionDuration: const Duration(milliseconds: 200),
+      reverseTransitionDuration: const Duration(milliseconds: 160),
       pageBuilder: (_, _, _) => StoryViewerScreen(stories: stories, initialIndex: index),
       transitionsBuilder: (_, a, _, child) => FadeTransition(
         opacity: a,

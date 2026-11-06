@@ -116,12 +116,16 @@ void main() {
     await scrollTo(tester, find.text('Fake parcel texts are tricking UPI users').first);
     await tester.tap(find.text('Fake parcel texts are tricking UPI users').first);
     await tester.pumpAndSettle();
+    // The story body is a lazy list: sections build as they scroll into view.
     for (final t in ['IN ONE LINE', 'KEY NUMBERS', 'What’s the trick?', 'Am I at risk?', 'Spot the signs', 'Stay safe', 'If it happened to you', 'Why it matters', 'Ask about this']) {
+      await scrollTo(tester, find.text(t).first);
       expect(find.text(t), findsWidgets, reason: t);
     }
     expect(find.byKey(const ValueKey('wa-demo-scam-1')), findsOneWidget);
     expect(find.text('Listen'), findsOneWidget);
     expect(find.text('Sources'), findsOneWidget);
+    // The helpline button sits in a scam section above (scroll back up to it).
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('call-1930')), -250, scrollable: find.byType(Scrollable).first);
     expect(find.byKey(const ValueKey('call-1930')), findsOneWidget);
     await scrollTo(tester, find.byKey(const ValueKey('jargon-UPI')));
     await tester.tap(find.byKey(const ValueKey('jargon-UPI')));

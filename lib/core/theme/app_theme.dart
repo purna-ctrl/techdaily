@@ -263,7 +263,9 @@ class AppTheme {
       fontFamily: bodyFont,
       fontFamilyFallback: kIndicFallback,
       textTheme: textTheme,
-      splashFactory: InkSparkle.splashFactory,
+      // InkRipple: no shader warm-up on the first tap (InkSparkle compiles a
+      // fragment shader and costs more per frame, especially on web).
+      splashFactory: InkRipple.splashFactory,
     );
 
     final shape12 = RoundedRectangleBorder(borderRadius: BorderRadius.circular(16));
@@ -416,16 +418,43 @@ class AppTheme {
         titleTextStyle: b(15, FontWeight.w600),
         subtitleTextStyle: b(13, FontWeight.w400, c: muted),
       ),
+      // Quick fade-up (200 ms in, 160 ms back) instead of the 450 ms
+      // fade-forwards that also animated the page underneath.
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.android: QuickPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
-          TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
-          TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
-          TargetPlatform.fuchsia: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.linux: QuickPageTransitionsBuilder(),
+          TargetPlatform.macOS: QuickPageTransitionsBuilder(),
+          TargetPlatform.windows: QuickPageTransitionsBuilder(),
+          TargetPlatform.fuchsia: QuickPageTransitionsBuilder(),
         },
       ),
+    );
+  }
+}
+
+/// Fast page transition: the new page fades in while rising 2% of the screen
+/// (200 ms; 160 ms when going back). Only the incoming page animates.
+class QuickPageTransitionsBuilder extends PageTransitionsBuilder {
+  const QuickPageTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 200);
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 160);
+
+  static final Animatable<Offset> _rise =
+      Tween<Offset>(begin: const Offset(0, 0.02), end: Offset.zero).chain(CurveTween(curve: Curves.easeOutCubic));
+  static final Animatable<double> _fade = CurveTween(curve: Curves.easeOut);
+
+  @override
+  Widget buildTransitions<T>(PageRoute<T> route, BuildContext context, Animation<double> animation,
+      Animation<double> secondaryAnimation, Widget child) {
+    return FadeTransition(
+      opacity: _fade.animate(animation),
+      child: SlideTransition(position: _rise.animate(animation), child: child),
     );
   }
 }

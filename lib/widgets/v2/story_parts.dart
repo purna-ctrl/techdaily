@@ -238,13 +238,15 @@ class StoryActions extends StatelessWidget {
             tooltip: saved ? 'Remove from saved' : 'Save story',
             onPressed: () async {
               final messenger = ScaffoldMessenger.maybeOf(context);
-              final now = await scope.saved.toggle(story);
+              final now = !scope.saved.isSaved(story.original.id);
+              final done = scope.saved.toggle(story);
               messenger?.showSnackBar(SnackBar(
                 content: Text(now
                     ? (scope.saved.isGuest ? 'Saved on this device' : 'Saved to your account')
                     : 'Removed from saved'),
                 duration: const Duration(seconds: 2),
               ));
+              await done;
             },
             icon: Icon(saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
                 color: saved ? AppTheme.accentOf(context) : null),

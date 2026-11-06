@@ -169,6 +169,8 @@ class _TechDailyAppState extends State<TechDailyApp> {
   late final StoryTranslator _translator = widget.translator ?? StoryTranslator();
   StreamSubscription<dynamic>? _authSub;
   AppLang _lang = appLanguage.value;
+  // Write pending translations when the app goes to the background.
+  late final AppLifecycleListener _life = AppLifecycleListener(onHide: () => unawaited(_translator.cache.save()));
 
   void _onLanguage() {
     final l = appLanguage.value;
@@ -187,6 +189,7 @@ class _TechDailyAppState extends State<TechDailyApp> {
   void initState() {
     super.initState();
     appLanguage.addListener(_onLanguage);
+    _life; // start listening
     _translator.setLanguage(appLanguage.value.code);
     unawaited(_translator.init());
     unawaited(appLanguage.load().then((_) {
@@ -204,6 +207,7 @@ class _TechDailyAppState extends State<TechDailyApp> {
   @override
   void dispose() {
     appLanguage.removeListener(_onLanguage);
+    _life.dispose();
     if (widget.translator == null) _translator.dispose();
     _authSub?.cancel();
     _themeModeNotifier.dispose();
@@ -381,8 +385,37 @@ class TechDailyMainShell extends StatefulWidget {
 class _TechDailyMainShellState extends State<TechDailyMainShell> {
   late int _index = widget.initialTab.clamp(0, 3);
   late final Set<int> _visited = {_index};
+  Timer? _warm;
 
-  Widget _screen(int i) {
+  @override
+  void initState() {
+    super.initState();
+    // Build the other tabs quietly once the feed has had time to show, one
+    // per idle moment, so the first tap on Search/Saved/Settings is instant
+    // instead of building the whole screen in the tap's frame.
+    _warm = Timer(const Duration(milliseconds: 2500), _warmNext);
+  }
+
+  void _warmNext() {
+    if (!mounted) return;
+    final next = [0, 1, 2, 3].where((i) => !_visited.contains(i)).toList();
+    if (next.isEmpty) return;
+    setState(() => _visited.add(next.first));
+    _warm = Timer(const Duration(milliseconds: 400), _warmNext);
+  }
+
+  @override
+  void dispose() {
+    _warm?.cancel();
+    super.dispose();
+  }
+
+  // Built once and reused: a new widget per tab switch made every tab
+  // (including the whole home feed) rebuild on each tap.
+  final Map<int, Widget> _screens = {};
+  Widget _screen(int i) => _screens[i] ??= RepaintBoundary(child: _buildScreen(i));
+
+  Widget _buildScreen(int i) {
     switch (i) {
       case 0:
         return HomeFeedScreen(initialCategory: widget.initialCategory);
@@ -400,7 +433,11 @@ class _TechDailyMainShellState extends State<TechDailyMainShell> {
     return Scaffold(
       body: IndexedStack(
         index: _index,
-        children: List.generate(4, (i) => _visited.contains(i) ? _screen(i) : const SizedBox.shrink()),
+        // Hidden tabs keep their state but stop their animations.
+        children: List.generate(
+          4,
+          (i) => _visited.contains(i) ? TickerMode(enabled: i == _index, child: _screen(i)) : const SizedBox.shrink(),
+        ),
       ),
       bottomNavigationBar: DecoratedBox(
         decoration: BoxDecoration(border: Border(top: BorderSide(color: AppTheme.borderOf(context)))),
