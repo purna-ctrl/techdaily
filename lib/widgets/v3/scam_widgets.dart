@@ -11,7 +11,9 @@ import 'story_image.dart';
 import 'ui.dart';
 import '../../l10n/app_language.dart' show tr;
 
-/// Red glow that breathes (static when motion is off).
+/// Red glow that breathes a few times when it appears, then rests (static on
+/// web and when motion is off). A never-ending pulse kept the app drawing 60
+/// frames a second for as long as the home screen was open.
 class PulsingGlow extends StatefulWidget {
   final Widget child;
   final Color color;
@@ -24,12 +26,19 @@ class PulsingGlow extends StatefulWidget {
 
 class _PulsingGlowState extends State<PulsingGlow> with SingleTickerProviderStateMixin {
   AnimationController? _c;
+  bool _rest = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Web: a static glow. Animating a large blurred shadow repaints the whole card every frame.
-    if (!kIsWeb && Motion.enabled(context)) _c ??= AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat(reverse: true);
+    if (!kIsWeb && Motion.enabled(context) && _c == null) {
+      _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+      // 3 breaths (out and back), ending on the resting glow.
+      _c!.repeat(reverse: true, count: 6).whenCompleteOrCancel(() {
+        if (mounted) setState(() => _rest = true);
+      });
+    }
   }
 
   @override
@@ -49,8 +58,8 @@ class _PulsingGlowState extends State<PulsingGlow> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final c = _c;
-    if (c == null) return _box(0.6);
-    return AnimatedBuilder(animation: c, builder: (_, _) => _box(Curves.easeInOut.transform(c.value)));
+    if (c == null || _rest) return _box(0.6);
+    return AnimatedBuilder(animation: c, builder: (_, _) => _box(0.6 * Curves.easeInOut.transform(c.value) + 0.2));
   }
 }
 
@@ -147,7 +156,7 @@ class _RadarDot extends StatelessWidget {
         child: Container(
           width: 9,
           height: 9,
-          decoration: const BoxDecoration(color: TD.red, shape: BoxShape.circle, boxShadow: [BoxShadow(color: TD.red, blurRadius: 8)]),
+          decoration: BoxDecoration(color: TD.red, shape: BoxShape.circle, boxShadow: TD.cheapFx ? null : const [BoxShadow(color: TD.red, blurRadius: 8)]),
         ),
       ),
     );

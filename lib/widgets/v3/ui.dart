@@ -1,5 +1,6 @@
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../core/constants/story_categories.dart';
@@ -21,6 +22,20 @@ class TD {
   static const Color redTint = Color(0xFFFF7683);
   static const Color whatsapp = Color(0xFF25D366);
   static const double rSm = 14, rMd = 20, rLg = 24, rXl = 28;
+
+  /// Web (CanvasKit) re-rasterises every blur on every frame (no raster
+  /// cache), so big soft glows are drawn smaller and fainter there.
+  static const bool cheapFx = kIsWeb;
+
+  /// A soft coloured glow under a card or chip. On web the blur is capped so
+  /// scrolling stays smooth; elsewhere it is drawn as designed.
+  static List<BoxShadow> glow(Color color, {double blur = 18, double spread = 0, Offset offset = Offset.zero, double alpha = 0.45}) {
+    if (cheapFx) {
+      final b = blur > 12 ? 12.0 : blur;
+      return [BoxShadow(color: color.withValues(alpha: alpha * 0.8), blurRadius: b, spreadRadius: spread.clamp(-6, 2), offset: offset * 0.4)];
+    }
+    return [BoxShadow(color: color.withValues(alpha: alpha), blurRadius: blur, spreadRadius: spread, offset: offset)];
+  }
 
   /// Scrim under text that sits on photos: >= 88% ink at the text.
   static const LinearGradient imageScrim = LinearGradient(
@@ -91,7 +106,7 @@ class GlassCard extends StatelessWidget {
       margin: margin,
       decoration: glow == null
           ? null
-          : BoxDecoration(borderRadius: br, boxShadow: [BoxShadow(color: glow!.withValues(alpha: 0.28), blurRadius: 36, spreadRadius: -8, offset: const Offset(0, 14))]),
+          : BoxDecoration(borderRadius: br, boxShadow: TD.glow(glow!, alpha: 0.28, blur: 36, spread: -8, offset: const Offset(0, 14))),
       child: body,
     );
   }
@@ -111,7 +126,7 @@ class CategoryChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: category.color,
         borderRadius: BorderRadius.circular(999),
-        boxShadow: glow ? [BoxShadow(color: category.color.withValues(alpha: 0.45), blurRadius: 18)] : null,
+        boxShadow: glow ? TD.glow(category.color, blur: 18) : null,
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(category.icon, size: small ? 12 : 14, color: TD.bg),
@@ -144,7 +159,7 @@ class DevelopingPill extends StatelessWidget {
           Container(
             width: 6,
             height: 6,
-            decoration: const BoxDecoration(color: TD.focus, shape: BoxShape.circle, boxShadow: [BoxShadow(color: TD.focus, blurRadius: 6)]),
+            decoration: BoxDecoration(color: TD.focus, shape: BoxShape.circle, boxShadow: TD.cheapFx ? null : const [BoxShadow(color: TD.focus, blurRadius: 6)]),
           ),
           const SizedBox(width: 5),
           Text(tr('DEVELOPING'), style: AppTheme.kicker(size: small ? 9.5 : 10.5, color: TD.focus).copyWith(fontWeight: FontWeight.w800)),
@@ -154,22 +169,56 @@ class DevelopingPill extends StatelessWidget {
   }
 }
 
-/// Fades + slides its child in once (skipped when motion is off).
-class FadeSlideIn extends StatelessWidget {
+/// Fades + slides its child in once (skipped when motion is off). Runs on the
+/// compositor (FadeTransition/SlideTransition: no rebuild per frame) and drops
+/// its layers when done.
+class FadeSlideIn extends StatefulWidget {
   final Widget child;
   final int index;
   final double offset;
   const FadeSlideIn({super.key, required this.child, this.index = 0, this.offset = 18});
 
   @override
+  State<FadeSlideIn> createState() => _FadeSlideInState();
+}
+
+class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStateMixin {
+  AnimationController? _c;
+  bool _done = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_c != null || _done) return;
+    if (!Motion.enabled(context)) {
+      _done = true;
+      return;
+    }
+    _c = AnimationController(vsync: this, duration: Duration(milliseconds: 260 + widget.index.clamp(0, 4) * 40))
+      ..addStatusListener((s) {
+        if (s == AnimationStatus.completed && mounted) setState(() => _done = true);
+      })
+      ..forward();
+  }
+
+  @override
+  void dispose() {
+    _c?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (!Motion.enabled(context)) return child;
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 420 + (index.clamp(0, 6)) * 60),
-      curve: Curves.easeOutCubic,
-      builder: (context, t, c) => Opacity(opacity: t, child: Transform.translate(offset: Offset(0, (1 - t) * offset), child: c)),
-      child: child,
+    final c = _c;
+    if (_done || c == null) return widget.child;
+    final curved = CurvedAnimation(parent: c, curve: Curves.easeOutCubic);
+    return FadeTransition(
+      opacity: curved,
+      child: AnimatedBuilder(
+        animation: curved,
+        builder: (_, child) => Transform.translate(offset: Offset(0, (1 - curved.value) * widget.offset), child: child),
+        child: widget.child,
+      ),
     );
   }
 }
@@ -214,12 +263,13 @@ class _PressableState extends State<Pressable> {
           onLongPress: widget.onLongPress,
           child: AnimatedScale(
             scale: _down ? 0.97 : 1,
-            duration: const Duration(milliseconds: 120),
+            duration: const Duration(milliseconds: 90),
             child: Container(
               foregroundDecoration: _focused
                   ? BoxDecoration(borderRadius: br, border: Border.all(color: TD.focus, width: 3))
                   : null,
-              child: widget.child,
+              // The card is recorded once; pressing only re-composites it.
+              child: RepaintBoundary(child: widget.child),
             ),
           ),
         ),

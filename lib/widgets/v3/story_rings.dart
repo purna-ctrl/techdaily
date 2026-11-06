@@ -57,12 +57,14 @@ class StoryRings extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             itemCount: stories.length,
             separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (context, i) => _Ring(
-              key: ValueKey('ring-$i'),
-              story: stories[i],
-              number: i + 1,
-              seen: viewed.contains(stories[i].id),
-              onTap: () => onOpen(i),
+            itemBuilder: (context, i) => RepaintBoundary(
+              child: _Ring(
+                key: ValueKey('ring-$i'),
+                story: stories[i],
+                number: i + 1,
+                seen: viewed.contains(stories[i].id),
+                onTap: () => onOpen(i),
+              ),
             ),
           ),
         ),
@@ -101,7 +103,7 @@ class _Ring extends StatelessWidget {
                   gradient: seen
                       ? const LinearGradient(colors: [Color(0xFF4A4A55), Color(0xFF34343D)])
                       : SweepGradient(colors: [cat.color, cat.tint, Colors.white, cat.color]),
-                  boxShadow: seen ? null : [BoxShadow(color: cat.color.withValues(alpha: 0.45), blurRadius: 14)],
+                  boxShadow: seen || TD.cheapFx ? null : [BoxShadow(color: cat.color.withValues(alpha: 0.45), blurRadius: 14)],
                 ),
                 child: Container(
                   padding: const EdgeInsets.all(2.5),

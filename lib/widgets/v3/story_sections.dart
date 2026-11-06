@@ -60,7 +60,7 @@ class SectionCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(TD.rLg),
           gradient: LinearGradient(colors: [color, color.withValues(alpha: 0.15), color], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 30, spreadRadius: -10, offset: const Offset(0, 14))],
+          boxShadow: TD.glow(color, alpha: 0.25, blur: 30, spread: -10, offset: const Offset(0, 14)),
         ),
         child: Container(
           padding: const EdgeInsets.all(18),
@@ -408,7 +408,10 @@ class StoryActionBar extends StatelessWidget {
                   color: const Color(0xE6141419),
                   borderRadius: BorderRadius.circular(TD.rLg),
                   border: Border.all(color: TD.glassBorder),
-                  boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 30, offset: Offset(0, 10))],
+                  // Floats over scrolling text: a small shadow on web, where blur is redrawn every frame.
+                  boxShadow: TD.cheapFx
+                      ? const [BoxShadow(color: Color(0x99000000), blurRadius: 10, offset: Offset(0, 4))]
+                      : const [BoxShadow(color: Color(0x99000000), blurRadius: 30, offset: Offset(0, 10))],
                 )
               : null,
           child: Row(children: [
@@ -453,12 +456,16 @@ class StoryActionBar extends StatelessWidget {
 Future<void> toggleSave(BuildContext context, Story story) async {
   final scope = StoriesScope.of(context);
   final messenger = ScaffoldMessenger.maybeOf(context);
-  final now = await scope.saved.toggle(story);
+  // The icon flips at once (optimistic) and the note shows in the same tap;
+  // the device/Firestore write finishes in the background.
+  final now = !scope.saved.isSaved(story.original.id);
+  final done = scope.saved.toggle(story);
   messenger?.hideCurrentSnackBar();
   messenger?.showSnackBar(SnackBar(
     content: Text(now ? (scope.saved.isGuest ? tr('Saved on this device') : tr('Saved to your account')) : tr('Removed from saved')),
     duration: const Duration(seconds: 2),
   ));
+  await done;
 }
 
 /// Category colour for a story id (helper for widgets that only have the id).

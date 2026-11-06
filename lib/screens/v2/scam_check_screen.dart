@@ -287,7 +287,7 @@ class ScamResultCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(TD.rLg),
           color: color.withValues(alpha: 0.09),
           border: Border.all(color: color.withValues(alpha: 0.7), width: 1.4),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.22), blurRadius: 24, spreadRadius: -6)],
+          boxShadow: TD.glow(color, alpha: 0.22, blur: 24, spread: -6),
         ),
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

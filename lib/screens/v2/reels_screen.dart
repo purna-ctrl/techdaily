@@ -117,7 +117,7 @@ class _ReelState extends State<_Reel> {
       decoration: BoxDecoration(
         color: TD.bg,
         border: s.isScam ? Border.all(color: TD.red, width: 3) : null,
-        boxShadow: s.isScam ? [BoxShadow(color: TD.red.withValues(alpha: 0.4), blurRadius: 30, spreadRadius: -6)] : null,
+        boxShadow: s.isScam ? TD.glow(TD.red, alpha: 0.4, blur: 30, spread: -6) : null,
       ),
       child: Column(children: [
         SizedBox(

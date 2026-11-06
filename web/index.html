@@ -67,6 +67,17 @@
   </style>
   <noscript><style id="td-nojs">#td-splash{display:none!important}</style></noscript>
   <link rel="preconnect" href="https://techdaily-img.purnabannu1488.workers.dev" crossorigin>
+  <!-- CanvasKit (the renderer) comes from Google's CDN: open the connection early. -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <script>
+    // Start downloading the story feed while the app code loads (same URL the app asks for).
+    (function () {
+      var l = document.createElement('link');
+      l.rel = 'preload'; l.as = 'fetch'; l.crossOrigin = 'anonymous';
+      l.href = '/data/feed.json?t=' + Math.floor(Date.now() / 300000);
+      document.head.appendChild(l);
+    })();
+  </script>
 </head>
 <body>
   <div id="td-splash" role="status" aria-live="polite">
