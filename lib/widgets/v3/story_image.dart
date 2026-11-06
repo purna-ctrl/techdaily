@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../core/config/app_config.dart';
@@ -21,15 +21,16 @@ class StoryImageView extends StatelessWidget {
   final int? cacheWidth;
   final Alignment artAlignment;
 
-  /// Vertical parallax shift in logical pixels (hero image).
-  final double parallax;
+  /// Vertical parallax shift in logical pixels (hero image). Only the image's
+  /// transform listens to it.
+  final ValueListenable<double>? parallax;
   const StoryImageView({
     super.key,
     required this.story,
     this.borderRadius,
     this.cacheWidth,
     this.artAlignment = Alignment.center,
-    this.parallax = 0,
+    this.parallax,
   });
 
   @override
@@ -41,13 +42,8 @@ class StoryImageView extends StatelessWidget {
       child = art;
     } else {
       final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 2;
-      child = Stack(fit: StackFit.expand, children: [
-        art,
-        Transform.translate(
-          offset: Offset(0, parallax),
-          child: Transform.scale(
-            scale: parallax == 0 ? 1 : 1.12,
-            child: Image.network(
+      final p = parallax;
+      Widget image(int? decodeWidth) => Image.network(
               kIsWeb ? webImageUrl(img.url) : img.url,
               key: ValueKey(img.url),
               fit: BoxFit.cover,
@@ -55,7 +51,7 @@ class StoryImageView extends StatelessWidget {
               // Web: through the CORS pass-through it draws in the canvas (smooth
               // scrolling); `<img>` only if that fails and there is no proxy.
               webHtmlElementStrategy: kImageProxy.isEmpty ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
-              cacheWidth: cacheWidth == null ? null : (cacheWidth! * dpr).round(),
+              cacheWidth: decodeWidth,
               filterQuality: FilterQuality.medium,
               gaplessPlayback: true,
               semanticLabel: null,
@@ -65,15 +61,35 @@ class StoryImageView extends StatelessWidget {
                 return const SizedBox.expand();
               },
               errorBuilder: (context, error, stack) => const SizedBox.expand(),
-            ),
+            );
+      // Decode at the size it is drawn (x device pixel ratio), never the
+      // publisher's full-size original. Parallax draws the image 12% larger.
+      final img0 = cacheWidth != null
+          ? image((cacheWidth! * dpr).round())
+          : LayoutBuilder(builder: (context, c) {
+              final w = c.maxWidth.isFinite ? c.maxWidth : MediaQuery.sizeOf(context).width;
+              return image(_bucket(w * dpr * (p == null ? 1 : 1.12)));
+            });
+      child = Stack(fit: StackFit.expand, children: [
+        art,
+        if (p == null)
+          img0
+        else
+          ValueListenableBuilder<double>(
+            valueListenable: p,
+            child: Transform.scale(scale: 1.12, child: img0),
+            builder: (context, dy, scaled) => Transform.translate(offset: Offset(0, dy), child: scaled),
           ),
-        ),
       ]);
     }
     if (borderRadius != null) child = ClipRRect(borderRadius: borderRadius!, child: child);
     return child;
   }
 }
+
+/// Rounds a decode width up to a 160 px step so small layout changes reuse
+/// the same decoded image.
+int _bucket(double px) => ((px / 160).ceil() * 160).clamp(160, 2400).toInt();
 
 /// Visible "Image: <Source>" credit that opens the source article.
 class ImageCredit extends StatelessWidget {
@@ -119,14 +135,14 @@ class ImageCredit extends StatelessWidget {
 /// Image + scrim + credit, for heroes and feature cards.
 class ScrimmedImage extends StatelessWidget {
   final Story story;
-  final double parallax;
+  final ValueListenable<double>? parallax;
   final bool showCredit;
   final bool compactCredit;
   final Gradient scrim;
   const ScrimmedImage({
     super.key,
     required this.story,
-    this.parallax = 0,
+    this.parallax,
     this.showCredit = true,
     this.compactCredit = false,
     this.scrim = TD.imageScrim,

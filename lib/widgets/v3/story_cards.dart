@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../core/stories_scope.dart';
@@ -17,6 +18,21 @@ String metaLine(Story s) {
 
 /// One-liner for cards: "what it means for you" (skipped for rule-based text).
 String? oneLiner(Story s) => s.isFallback || s.whatItMeans.trim().isEmpty ? null : s.whatItMeans;
+
+/// Builds [builder] with [story] in the reader's language, and rebuilds only
+/// this card when its translation arrives (never the whole feed).
+class TranslatedStory extends StatelessWidget {
+  final Story story;
+  final Widget Function(BuildContext context, Story shown) builder;
+  const TranslatedStory({super.key, required this.story, required this.builder});
+
+  @override
+  Widget build(BuildContext context) {
+    final tx = StoriesScope.of(context).translations;
+    if (tx.lang == 'en') return builder(context, story.original);
+    return ListenableBuilder(listenable: tx, builder: (context, _) => builder(context, tx.card(story)));
+  }
+}
 
 class SaveIconButton extends StatelessWidget {
   final Story story;
@@ -44,11 +60,14 @@ class SaveIconButton extends StatelessWidget {
 }
 
 /// #1 story: full-bleed image, scrim, chip, big headline, parallax.
+///
+/// [parallax] is listened to by the image alone, so scrolling never rebuilds
+/// the card.
 class HeroStoryCard extends StatelessWidget {
   final Story story;
-  final double parallax;
+  final ValueListenable<double>? parallax;
   final VoidCallback onTap;
-  const HeroStoryCard({super.key, required this.story, required this.onTap, this.parallax = 0});
+  const HeroStoryCard({super.key, required this.story, required this.onTap, this.parallax});
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +84,7 @@ class HeroStoryCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(TD.rXl),
             border: Border.all(color: TD.glassBorder),
-            boxShadow: [BoxShadow(color: cat.color.withValues(alpha: 0.32), blurRadius: 50, spreadRadius: -16, offset: const Offset(0, 24))],
+            boxShadow: TD.glow(cat.color, alpha: 0.32, blur: 50, spread: -16, offset: const Offset(0, 24)),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(TD.rXl),
@@ -84,7 +103,10 @@ class HeroStoryCard extends StatelessWidget {
                   Text(story.headline,
                       maxLines: 4,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTheme.display(29, color: Colors.white, height: 1.08).copyWith(shadows: const [Shadow(color: Color(0x99000000), blurRadius: 14)])),
+                      // The scrim already gives >= 88% ink behind the text; the soft
+                      // text shadow is skipped on web, where it is re-blurred every frame.
+                      style: AppTheme.display(29, color: Colors.white, height: 1.08)
+                          .copyWith(shadows: TD.cheapFx ? null : const [Shadow(color: Color(0x99000000), blurRadius: 14)])),
                   if (line != null) ...[
                     const SizedBox(height: 8),
                     Text(line, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14.5, height: 1.4, color: Color(0xFFDAD6CE))),

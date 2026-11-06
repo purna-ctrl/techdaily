@@ -85,6 +85,18 @@ const List<JargonEntry> kJargon = [
 /// Finds jargon in [text]: each entry at most once, in reading order.
 /// Returns (start, end, entry) ranges that never overlap.
 List<(int, int, JargonEntry)> findJargon(String text, {int max = 6}) {
+  // Story text is re-laid out on rebuilds; scanning ~100 terms each time is wasted work.
+  final key = '$max|$text';
+  final cached = _jargonMemo[key];
+  if (cached != null) return cached;
+  final found = _findJargon(text, max);
+  if (_jargonMemo.length > 300) _jargonMemo.clear();
+  return _jargonMemo[key] = found;
+}
+
+final Map<String, List<(int, int, JargonEntry)>> _jargonMemo = {};
+
+List<(int, int, JargonEntry)> _findJargon(String text, int max) {
   final hits = <(int, int, JargonEntry)>[];
   final lower = text.toLowerCase();
   for (final e in kJargon) {
@@ -120,7 +132,12 @@ List<(int, int, JargonEntry)> findJargon(String text, {int max = 6}) {
   return out;
 }
 
-bool _isWordChar(String c) => RegExp(r'[A-Za-z0-9]').hasMatch(c);
+// Char-code test (was a new RegExp per character checked: slow on web).
+bool _isWordChar(String c) {
+  if (c.isEmpty) return false;
+  final u = c.codeUnitAt(0);
+  return (u >= 48 && u <= 57) || (u >= 65 && u <= 90) || (u >= 97 && u <= 122);
+}
 
 /// Distinct jargon entries across several texts (for the "Jargon in this story" chips).
 List<JargonEntry> jargonIn(Iterable<String> texts, {int max = 8}) {

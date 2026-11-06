@@ -116,7 +116,8 @@ class TranslationCache {
     _mem[key] = fields;
     _trim();
     _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 600), save);
+    // Batches arrive in bursts; write the (up to ~900 KB) cache once they settle.
+    _saveTimer = Timer(const Duration(seconds: 3), save);
   }
 
   void _trim() {
@@ -226,7 +227,14 @@ class StoryTranslator extends ChangeNotifier {
     return f;
   }
 
-  static String _key(String lang, String id, String kind, TrFields f) => '$lang|$id|$kind|${contentHash(jsonEncode(f))}';
+
+  // Content hashes per story object: cards are built on every scroll, and
+  // hashing the whole story text each time showed up in frame times.
+  static final Expando<String> _fullHash = Expando('trFullHash');
+  static final Expando<String> _cardHash = Expando('trCardHash');
+
+  String _fullKey(Story s) => '$_lang|${s.id}|full|${_fullHash[s] ??= contentHash(jsonEncode(fullFields(s)))}';
+  String _cardKey(Story s) => '$_lang|${s.id}|card|${_cardHash[s] ??= contentHash(jsonEncode(cardFields(s)))}';
 
   TrStatus _status(String key) {
     if (cache.get(key) != null) return TrStatus.done;
@@ -239,14 +247,13 @@ class StoryTranslator extends ChangeNotifier {
   Story card(Story story) {
     final s = story.original;
     if (_lang == 'en') return s;
-    final fullHit = cache.get(_key(_lang, s.id, 'full', fullFields(s)));
-    if (fullHit != null) return s.withTranslation(fullHit);
-    final src = cardFields(s);
-    final key = _key(_lang, s.id, 'card', src);
+    final fullHit = cache.get(_fullKey(s));
+    if (fullHit != null) return _translated(s, fullHit);
+    final key = _cardKey(s);
     final hit = cache.get(key);
-    if (hit != null) return s.withTranslation(hit);
+    if (hit != null) return _translated(s, hit);
     if (_status(key) == TrStatus.pending && !_inFlight.contains(key) && !_queued.containsKey(key)) {
-      _queued[key] = src;
+      _queued[key] = cardFields(s);
       _timer ??= Timer(debounce, _flush);
     }
     return s;
@@ -255,24 +262,36 @@ class StoryTranslator extends ChangeNotifier {
   TrStatus cardStatus(Story story) {
     final s = story.original;
     if (_lang == 'en') return TrStatus.english;
-    if (cache.get(_key(_lang, s.id, 'full', fullFields(s))) != null) return TrStatus.done;
-    return _status(_key(_lang, s.id, 'card', cardFields(s)));
+    if (cache.get(_fullKey(s)) != null) return TrStatus.done;
+    return _status(_cardKey(s));
   }
 
   /// The whole story translated (requests it once; the original while pending).
   Story full(Story story) {
     final s = story.original;
     if (_lang == 'en') return s;
-    final src = fullFields(s);
-    final key = _key(_lang, s.id, 'full', src);
+    final key = _fullKey(s);
     final hit = cache.get(key);
-    if (hit != null) return s.withTranslation(hit);
-    if (_status(key) == TrStatus.pending && !_inFlight.contains(key)) unawaited(_send({key: src}));
-    final c = cache.get(_key(_lang, s.id, 'card', cardFields(s)));
-    return c != null ? s.withTranslation(c) : s;
+    if (hit != null) return _translated(s, hit);
+    if (_status(key) == TrStatus.pending && !_inFlight.contains(key)) unawaited(_send({key: fullFields(s)}));
+    final c = cache.get(_cardKey(s));
+    return c != null ? _translated(s, c) : s;
   }
 
-  TrStatus fullStatus(Story story) => _lang == 'en' ? TrStatus.english : _status(_key(_lang, story.id, 'full', fullFields(story.original)));
+  TrStatus fullStatus(Story story) => _lang == 'en' ? TrStatus.english : _status(_fullKey(story.original));
+
+  // The same translated Story object is handed back while its fields are
+  // unchanged, so widgets below can skip work (and image keys stay stable).
+  final Map<String, (TrFields, Story)> _shown = {};
+  Story _translated(Story s, TrFields f) {
+    final k = '$_lang|${s.id}';
+    final prev = _shown[k];
+    if (prev != null && identical(prev.$1, f) && identical(prev.$2.original, s)) return prev.$2;
+    final t = s.withTranslation(f);
+    if (_shown.length > 600) _shown.clear();
+    _shown[k] = (f, t);
+    return t;
+  }
 
   /// Forget a failure so the next build asks again (the "Try again" link).
   void retry(Story s) {

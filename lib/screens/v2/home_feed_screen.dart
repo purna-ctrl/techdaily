@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals, setEquals;
 import 'package:flutter/material.dart';
 
 import '../../core/constants/story_categories.dart';
@@ -58,7 +59,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   void _select(String id) {
     setState(() => _tab = id);
     if (_scroll.hasClients && _scroll.offset > 170) {
-      _scroll.animateTo(170, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+      _scroll.animateTo(170, duration: const Duration(milliseconds: 200), curve: Curves.easeOutCubic);
     }
   }
 
@@ -72,8 +73,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final scope = StoriesScope.of(context);
+    // Only topic changes rebuild the whole feed. Translations arriving for a
+    // few cards rebuild just those cards (see [TranslatedStory]); a language
+    // switch repaints everything once in main.dart.
     return ListenableBuilder(
-      listenable: Listenable.merge([scope.topics, scope.translations]),
+      listenable: scope.topics,
       builder: (context, _) {
         final hidden = scope.topics.value;
         final visible = scope.topics.visibleCategories;
@@ -98,7 +102,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                 );
               }
               final feed = snap.data ?? StoryFeed.empty;
-              final top = feed.topStories().where((s) => !hidden.contains(s.category)).toList();
+              final top = _topFor(feed, hidden);
               return RefreshIndicator(
                 onRefresh: _refresh,
                 color: AppTheme.accentDark,
@@ -156,15 +160,18 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         if (!hidden.contains(t.category) && feed.bySlug(t.slug) != null) feed.bySlug(t.slug)!,
     ];
     final tx = scope.translations;
-    final list = [for (final s in (today.isNotEmpty ? today : feed.topStories().where((s) => !hidden.contains(s.category)).take(5).toList())) tx.card(s)];
+    final source = today.isNotEmpty ? today : _topFor(feed, hidden).take(5).toList();
     return ListenableBuilder(
-      listenable: scope.caughtUp,
-      builder: (context, _) => StoryRings(
-        stories: list,
-        streak: scope.caughtUp.streak,
-        caughtUp: scope.caughtUp.doneToday,
-        onOpen: (i) => StoryViewerScreen.open(context, list, i),
-      ),
+      listenable: Listenable.merge([scope.caughtUp, tx]),
+      builder: (context, _) {
+        final list = [for (final s in source) tx.card(s)];
+        return StoryRings(
+          stories: list,
+          streak: scope.caughtUp.streak,
+          caughtUp: scope.caughtUp.doneToday,
+          onOpen: (i) => StoryViewerScreen.open(context, list, i),
+        );
+      },
     );
   }
 
@@ -181,42 +188,37 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     }
     if (_tab != kTopStories.id) return _categoryContent(context, feed, storyCategoryById(_tab));
     final tx = StoriesScope.of(context).translations;
-
-    // Scam Radar: the newest scam story (when Scams & Security is visible); the
-    // hero is the best-ranked story that isn't already on the radar.
-    final scams = top.where((s) => s.isScam).toList()..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
-    final scam = scams.isEmpty ? _noStory : scams.first;
-    final hero = top.firstWhere((s) => s.id != scam.id, orElse: () => top.first);
-    final rails = [
-      for (final c in visible)
-        if (feed.inCategory(c.id).isNotEmpty) (c, feed.inCategory(c.id).take(10).toList()),
-    ];
-    final shownInRails = {for (final r in rails) ...r.$2.map((s) => s.id)};
-    final latest = top.where((s) => s.id != hero.id && s.id != scam.id && !shownInRails.contains(s.id)).take(20).toList();
-    final latestAll = latest.isNotEmpty ? latest : top.skip(1).take(12).toList();
+    final l = _layoutFor(feed, top, visible);
+    final scam = l.scam, hero = l.hero, rails = l.rails, latestAll = l.latest;
 
     return [
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.only(top: 6),
           child: FadeSlideIn(
-            child: ValueListenableBuilder<double>(
-              valueListenable: _parallax,
-              builder: (context, p, _) => HeroStoryCard(story: tx.card(hero), parallax: p, onTap: () => openStory(context, hero)),
+            child: TranslatedStory(
+              story: hero,
+              builder: (context, s) => HeroStoryCard(story: s, parallax: _parallax, onTap: () => openStory(context, hero)),
             ),
           ),
         ),
       ),
-      if (tx.lang != 'en' && tx.hasRecentFailure)
+      if (tx.lang != 'en')
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            child: Align(alignment: Alignment.centerLeft, child: TranslationNote(status: TrStatus.failed, onRetry: () => setState(() {}))),
+          child: ListenableBuilder(
+            listenable: tx,
+            builder: (context, _) => !tx.hasRecentFailure
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                    child: Align(alignment: Alignment.centerLeft, child: TranslationNote(status: TrStatus.failed, onRetry: () => setState(() {}))),
+                  ),
           ),
         ),
       if (!identical(scam, _noStory)) ...[
         const SliverToBoxAdapter(child: SizedBox(height: 22)),
-        SliverToBoxAdapter(child: FadeSlideIn(index: 1, child: ScamRadarCard(story: tx.card(scam)))),
+        SliverToBoxAdapter(
+            child: FadeSlideIn(index: 1, child: TranslatedStory(story: scam, builder: (context, s) => ScamRadarCard(story: s)))),
       ] else ...[
         const SliverToBoxAdapter(child: SizedBox(height: 22)),
         const SliverToBoxAdapter(child: ScamCheckEntryCard()),
@@ -236,7 +238,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               itemCount: list.length,
               separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, i) => RailCard(story: tx.card(list[i]), onTap: () => openStory(context, list[i])),
+              itemBuilder: (context, i) => TranslatedStory(
+                key: ValueKey(list[i].id),
+                story: list[i],
+                builder: (context, s) => RailCard(story: s, onTap: () => openStory(context, list[i])),
+              ),
             ),
           ),
         ),
@@ -246,7 +252,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         sliver: SliverList.builder(
           itemCount: latestAll.length,
-          itemBuilder: (context, i) => _constrain(FadeSlideIn(index: i, child: CompactStoryCard(story: tx.card(latestAll[i])))),
+          itemBuilder: (context, i) => _card(latestAll[i]),
         ),
       ),
     ];
@@ -254,7 +260,6 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   List<Widget> _categoryContent(BuildContext context, StoryFeed feed, StoryCategory c) {
     final list = feed.inCategory(c.id);
-    final tx = StoriesScope.of(context).translations;
     if (list.isEmpty) {
       return [
         SliverToBoxAdapter(
@@ -269,9 +274,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.only(top: 6, bottom: 14),
-          child: ValueListenableBuilder<double>(
-            valueListenable: _parallax,
-            builder: (context, p, _) => HeroStoryCard(story: tx.card(list.first), parallax: p, onTap: () => openStory(context, list.first)),
+          child: TranslatedStory(
+            story: list.first,
+            builder: (context, s) => HeroStoryCard(story: s, parallax: _parallax, onTap: () => openStory(context, list.first)),
           ),
         ),
       ),
@@ -285,13 +290,70 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         sliver: SliverList.builder(
           itemCount: list.length - 1,
-          itemBuilder: (context, i) => _constrain(FadeSlideIn(index: i, child: CompactStoryCard(story: tx.card(list[i + 1])))),
+          itemBuilder: (context, i) => _card(list[i + 1]),
         ),
       ),
     ];
   }
 
+  /// A list card. No entrance animation here: cards scrolled into view used to
+  /// fade in one by one, which kept every scroll frame busy.
+  static Widget _card(Story story) => _constrain(TranslatedStory(
+        key: ValueKey(story.id),
+        story: story,
+        builder: (context, s) => CompactStoryCard(story: s, onTap: () => openStory(context, story)),
+      ));
+
+  // Ranking/filtering is done once per feed + topic filter, not on every build.
+  StoryFeed? _memoFeed;
+  Set<String>? _memoHidden;
+  List<Story> _memoTop = const [];
+  List<StoryCategory>? _memoVisible;
+  _HomeLayout? _memoLayout;
+
+  List<Story> _topFor(StoryFeed feed, Set<String> hidden) {
+    if (!identical(feed, _memoFeed) || !setEquals(hidden, _memoHidden)) {
+      _memoFeed = feed;
+      _memoHidden = {...hidden};
+      _memoTop = feed.topStories().where((s) => !hidden.contains(s.category)).toList();
+      _memoLayout = null;
+    }
+    return _memoTop;
+  }
+
+  _HomeLayout _layoutFor(StoryFeed feed, List<Story> top, List<StoryCategory> visible) {
+    final cached = _memoLayout;
+    if (cached != null && identical(cached.top, top) && listEquals(_memoVisible, visible)) return cached;
+    _memoVisible = List.of(visible);
+    return _memoLayout = _HomeLayout.compute(feed, top, visible);
+  }
+
   static Widget _constrain(Widget child) => Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: child));
+}
+
+/// What the Top Stories tab shows, worked out once per feed.
+class _HomeLayout {
+  final List<Story> top;
+  final Story scam;
+  final Story hero;
+  final List<(StoryCategory, List<Story>)> rails;
+  final List<Story> latest;
+  const _HomeLayout(this.top, this.scam, this.hero, this.rails, this.latest);
+
+  factory _HomeLayout.compute(StoryFeed feed, List<Story> top, List<StoryCategory> visible) {
+    // Scam Radar: the newest scam story (when Scams & Security is visible); the
+    // hero is the best-ranked story that isn't already on the radar.
+    final scams = top.where((s) => s.isScam).toList()..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+    final scam = scams.isEmpty ? _noStory : scams.first;
+    final hero = top.firstWhere((s) => s.id != scam.id, orElse: () => top.first);
+    final rails = <(StoryCategory, List<Story>)>[
+      for (final c in visible)
+        if (feed.inCategory(c.id).isNotEmpty) (c, feed.inCategory(c.id).take(10).toList()),
+    ];
+    final shownInRails = {for (final r in rails) ...r.$2.map((s) => s.id)};
+    final latest = top.where((s) => s.id != hero.id && s.id != scam.id && !shownInRails.contains(s.id)).take(20).toList();
+    return _HomeLayout(top, scam, hero, rails, latest.isNotEmpty ? latest : top.skip(1).take(12).toList());
+  }
 }
 
 final Story _noStory = Story(
@@ -348,13 +410,13 @@ class _PillBarDelegate extends SliverPersistentHeaderDelegate {
         button: true,
         child: AnimatedContainer(
           key: ValueKey('tab-${c.id}'),
-          duration: const Duration(milliseconds: 220),
+          duration: const Duration(milliseconds: 140),
           height: 40,
           decoration: BoxDecoration(
             color: on ? c.color : const Color(0x0FFFFFFF),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: on ? c.color : TD.glassBorder),
-            boxShadow: on ? [BoxShadow(color: c.color.withValues(alpha: 0.45), blurRadius: 16)] : null,
+            boxShadow: on ? TD.glow(c.color, blur: 16) : null,
           ),
           child: Material(
             type: MaterialType.transparency,
